@@ -1,8 +1,6 @@
 package activitystreamer.client;
 
 import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -12,12 +10,10 @@ import messages.BadMessageException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
 import activitystreamer.util.Settings;
 
-import messages.Message;
+import messages.*;
 
 public class ClientSkeleton extends Thread {
 	private static final Logger log = LogManager.getLogger();
@@ -53,7 +49,7 @@ public class ClientSkeleton extends Thread {
 		sendRawStringToServer(activityObj.toString());
 		String response = readRawStringFromServer();
 		try {
-			Message message = Message.getMessageFromJson(response);
+			Message message = MessageGenerator.fromString(response);
 			textFrame.setOutputText(message.toJSONObject());
 		} catch (BadMessageException e) {
 			e.getMessage();
@@ -77,6 +73,13 @@ public class ClientSkeleton extends Thread {
 		catch (IOException e) {
 			System.out.println(e.getMessage());
 		}
+
+		/*
+		String username = Settings.getUsername();
+		String secret = Settings.getSecret();
+		LoginMessage loginMessage = new LoginMessage(username, secret);
+		sendMessageToServer(loginMessage);
+		*/
 	}
 
 	private void sendRawStringToServer(String string) {
@@ -90,5 +93,9 @@ public class ClientSkeleton extends Thread {
 			e.printStackTrace();
 			return "";
 		}
+	}
+
+	public void sendMessageToServer(Message message) {
+		sendRawStringToServer(message.toString());
 	}
 }
