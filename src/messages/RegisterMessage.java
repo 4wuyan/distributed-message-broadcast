@@ -8,4 +8,12 @@ public class RegisterMessage extends Message {
         this.username = username;
         this.secret = secret;
     }
+
+    public String getSecret() {
+        return secret;
+    }
+
+    public String getUsername() {
+        return username;
+    }
 }
