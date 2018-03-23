@@ -20,6 +20,8 @@ public class ClientSkeleton extends Thread {
 	private static final Logger log = LogManager.getLogger();
 	private static ClientSkeleton clientSolution;
 	private TextFrame textFrame;
+	private BufferedReader in;
+	private PrintWriter out;
 	
 
 	
@@ -44,7 +46,18 @@ public class ClientSkeleton extends Thread {
 	
 	@SuppressWarnings("unchecked")
 	public void sendActivityObject(JSONObject activityObj){
-		
+		sendRawStringToServer(activityObj.toString());
+
+		// Temporary test only! Probably need to be changed later.
+		String response = readRawStringFromServer();
+		JSONParser parser = new JSONParser();
+		JSONObject json = null;
+		try {
+			json = (JSONObject) parser.parse(response);
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		textFrame.setOutputText(json);
 	}
 	
 	
@@ -54,8 +67,28 @@ public class ClientSkeleton extends Thread {
 	
 	
 	public void run(){
-
+		int remotePort = Settings.getRemotePort();
+		String remoteHostname = Settings.getRemoteHostname();
+		try {
+			Socket socket = new Socket(remoteHostname, remotePort);
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			out = new PrintWriter(socket.getOutputStream(), true);
+		}
+		catch (IOException e) {
+			System.out.println(e.getMessage());
+		}
 	}
 
-	
+	public void sendRawStringToServer(String string) {
+		out.println(string);
+	}
+
+	public String readRawStringFromServer() {
+		try {
+			return in.readLine();
+		} catch (IOException e) {
+			e.printStackTrace();
+			return "";
+		}
+	}
 }
