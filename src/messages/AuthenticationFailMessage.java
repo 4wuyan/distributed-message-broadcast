@@ -1,9 +1,9 @@
 package messages;
 
-public class AuthenticationFail extends Message {
+public class AuthenticationFailMessage extends Message {
     private String info;
 
-    public AuthenticationFail(String info) {
+    public AuthenticationFailMessage(String info) {
         super("AUTHENTICATION_FAIL");
         this.info = info;
     }
