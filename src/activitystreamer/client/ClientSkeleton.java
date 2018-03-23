@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+import messages.BadMessageException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
@@ -15,6 +16,8 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import activitystreamer.util.Settings;
+
+import messages.Message;
 
 public class ClientSkeleton extends Thread {
 	private static final Logger log = LogManager.getLogger();
@@ -46,18 +49,15 @@ public class ClientSkeleton extends Thread {
 	
 	@SuppressWarnings("unchecked")
 	public void sendActivityObject(JSONObject activityObj){
-		sendRawStringToServer(activityObj.toString());
-
 		// Temporary test only! Probably need to be changed later.
+		sendRawStringToServer(activityObj.toString());
 		String response = readRawStringFromServer();
-		JSONParser parser = new JSONParser();
-		JSONObject json = null;
 		try {
-			json = (JSONObject) parser.parse(response);
-		} catch (ParseException e) {
-			e.printStackTrace();
+			Message message = Message.getMessageFromJson(response);
+			textFrame.setOutputText(message.toJSONObject());
+		} catch (BadMessageException e) {
+			e.getMessage();
 		}
-		textFrame.setOutputText(json);
 	}
 	
 	
@@ -79,11 +79,11 @@ public class ClientSkeleton extends Thread {
 		}
 	}
 
-	public void sendRawStringToServer(String string) {
+	private void sendRawStringToServer(String string) {
 		out.println(string);
 	}
 
-	public String readRawStringFromServer() {
+	private String readRawStringFromServer() {
 		try {
 			return in.readLine();
 		} catch (IOException e) {
