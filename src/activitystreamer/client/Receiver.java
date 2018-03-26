@@ -24,14 +24,24 @@ public class Receiver extends Thread {
     @SuppressWarnings("InfiniteLoopStatement")
     public void run() {
         while (true) {
-            String response = "";
+            String response, command;
             try {
                 response = in.readLine();
             } catch (IOException e) {
-                e.printStackTrace();
+                log.debug("socket closed");
+                break;
             }
+            try {
+                command = Message.getCommandFromJson(response);
+            } catch (NullPointerException e) {
+                log.debug("the server disconnected");
+                break;
+            } catch (IllegalStateException e) {
+                log.debug("failed to parse an incoming message in json");
+                continue;
+            }
+
             log.info(response);
-            String command = Message.getCommandFromJson(response);
             if (command.equals("ACTIVITY_BROADCAST")) {
                 ClientSkeleton.getInstance().updateActivityPanel(response);
             }

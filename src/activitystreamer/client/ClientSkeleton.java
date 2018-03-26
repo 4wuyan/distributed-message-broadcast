@@ -56,7 +56,13 @@ public class ClientSkeleton extends Thread {
 	
 	
 	public void disconnect(){
-		
+		receiver.interrupt();
+		sendMessageToServer(new LogoutMessage());
+		try {
+			socket.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	
