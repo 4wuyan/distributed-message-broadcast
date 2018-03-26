@@ -1,12 +1,16 @@
 package messages;
 
 import com.google.gson.Gson;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 public abstract class Message {
     private String command;
+
+    public static String getCommandFromJson(String json) {
+        JsonObject jsonObject = new JsonParser().parse(json).getAsJsonObject();
+        return jsonObject.get("command").getAsString();
+    }
 
     public Message(String command) {
         this.command = command;
@@ -19,16 +23,5 @@ public abstract class Message {
     @Override
     public String toString() {
         return new Gson().toJson(this);
-    }
-
-    public JSONObject toJSONObject() {
-        JSONParser parser = new JSONParser();
-        JSONObject jsonObject = null;
-        try {
-            jsonObject = (JSONObject) parser.parse(toString());
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
-        return jsonObject;
     }
 }

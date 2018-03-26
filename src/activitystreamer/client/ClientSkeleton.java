@@ -6,6 +6,8 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import messages.BadMessageException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,14 +47,20 @@ public class ClientSkeleton extends Thread {
 	
 	@SuppressWarnings("unchecked")
 	public void sendActivityObject(JSONObject activityObj){
+		String username = Settings.getUsername();
+		String secret = Settings.getSecret();
+		ActivityMessage message = new ActivityMessage(username, secret, activityObj);
+		sendRawStringToServer(message.toString());
+
 		// Temporary test only! Probably need to be changed later.
-		sendRawStringToServer(activityObj.toString());
 		String response = readRawStringFromServer();
-		try {
-			Message message = MessageGenerator.fromString(response);
-			textFrame.setOutputText(message.toJSONObject());
-		} catch (BadMessageException e) {
-			e.getMessage();
+		System.out.println(response);
+		String command = Message.getCommandFromJson(response);
+		if (command.equals("ACTIVITY_BROADCAST")) {
+			ActivityBroadcastMessage reply =
+					new Gson().fromJson(response, ActivityBroadcastMessage.class);
+			JSONObject activity = reply.getActivity();
+			textFrame.setOutputText(activity);
 		}
 	}
 	
@@ -74,12 +82,12 @@ public class ClientSkeleton extends Thread {
 			System.out.println(e.getMessage());
 		}
 
-		/*
+
 		String username = Settings.getUsername();
 		String secret = Settings.getSecret();
 		LoginMessage loginMessage = new LoginMessage(username, secret);
 		sendMessageToServer(loginMessage);
-		*/
+
 	}
 
 	private void sendRawStringToServer(String string) {
