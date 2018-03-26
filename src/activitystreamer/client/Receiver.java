@@ -28,12 +28,14 @@ public class Receiver extends Thread {
             try {
                 response = in.readLine();
             } catch (IOException e) {
+                // Happens when Client disconnects first
                 log.debug("socket closed");
                 break;
             }
             try {
                 command = Message.getCommandFromJson(response);
             } catch (NullPointerException e) {
+                // Happends when Server disconnects first
                 log.debug("the server disconnected");
                 break;
             } catch (IllegalStateException e) {
