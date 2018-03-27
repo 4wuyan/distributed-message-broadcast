@@ -40,11 +40,11 @@ public class ClientSkeleton extends Thread {
 		try {
 			socket = new Socket(remoteHostname, remotePort);
 			out = new PrintWriter(socket.getOutputStream(), true);
+			new Receiver(socket);
 		} catch (IOException e) {
 			log.fatal("failed to establish the socket connection: "+e);
 			System.exit(-1);
 		}
-		new Receiver(socket);
 
 		String username = Settings.getUsername();
 		String secret = Settings.getSecret();
@@ -86,7 +86,6 @@ public class ClientSkeleton extends Thread {
 				socket.close();
 			} catch (IOException e) {
 				log.error("error in closing the socket");
-				e.printStackTrace();
 			}
 		}
 	}
@@ -122,7 +121,7 @@ public class ClientSkeleton extends Thread {
 				case "LOGIN_SUCCESS": break;
 				case "REDIRECT": redirect(response); break;
 				default:
-					// For INVALID_MESSAGE, LOGIN_FAIL, REGISTER_FAILED
+					// For INVALID_MESSAGE, LOGIN_FAILED, REGISTER_FAILED
 					// AUTHENTICATION_FAIL, REDIRECT
 					// and other commands.
 					shouldExit = true; break;

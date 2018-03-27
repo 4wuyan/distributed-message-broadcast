@@ -10,12 +10,8 @@ public class Receiver extends Thread {
     private static final Logger log = LogManager.getLogger();
     private BufferedReader in;
 
-    Receiver(Socket socket) {
-        try {
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    Receiver(Socket socket) throws IOException {
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         start();
     }
 
