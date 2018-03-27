@@ -34,7 +34,8 @@ public class Receiver extends Thread {
                 log.error("error in reading from the socket");
                 break;
             }
-            ClientSkeleton.getInstance().process(response);
+            log.info(response);
+            ClientSkeleton.getInstance().processReplyString(response);
         }
         // Make sure we close the socket
         ClientSkeleton.getInstance().closeSocket();
