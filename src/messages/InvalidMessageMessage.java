@@ -1,9 +1,9 @@
 package messages;
 
-public class InvalidMessage extends Message{
+public class InvalidMessageMessage extends Message{
     private String info;
 
-    public InvalidMessage(String info) {
+    public InvalidMessageMessage(String info) {
         super("INVALID_MESSAGE");
         this.info = info;
     }

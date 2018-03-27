@@ -9,4 +9,12 @@ public class RedirectMessage extends Message{
         this.hostname = hostname;
         this.port = port;
     }
+
+    public String getHostname() {
+        return hostname;
+    }
+
+    public int getPort() {
+        return port;
+    }
 }

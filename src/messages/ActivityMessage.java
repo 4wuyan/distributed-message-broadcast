@@ -1,10 +1,12 @@
 package messages;
 
+import org.json.simple.JSONObject;
+
 public class ActivityMessage extends Message{
     private String username, secret;
-    private Activity activity;
+    private JSONObject activity;
 
-    public ActivityMessage (String username, String secret, Activity activity) {
+    public ActivityMessage (String username, String secret, JSONObject activity) {
         super("ACTIVITY_MESSAGE");
         this.username = username;
         this.secret = secret;
