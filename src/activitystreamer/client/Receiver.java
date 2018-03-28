@@ -12,7 +12,6 @@ public class Receiver extends Thread {
 
     Receiver(Socket socket) throws IOException {
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        start();
     }
 
     @Override
