@@ -31,16 +31,15 @@ public class ClientSkeleton extends Thread {
 	
 	private ClientSkeleton(){
 		textFrame = new TextFrame();
-		start();
 	}
 
-	private void connect() {
+	public void run() {
 		int remotePort = Settings.getRemotePort();
 		String remoteHostname = Settings.getRemoteHostname();
 		try {
 			socket = new Socket(remoteHostname, remotePort);
 			out = new PrintWriter(socket.getOutputStream(), true);
-			new Receiver(socket);
+			new Receiver(socket).start();
 		} catch (IOException e) {
 			log.fatal("failed to establish the socket connection: "+e);
 			System.exit(-1);
@@ -88,11 +87,6 @@ public class ClientSkeleton extends Thread {
 				log.error("error in closing the socket");
 			}
 		}
-	}
-	
-	
-	public void run(){
-	    connect();
 	}
 
 	private void sendMessageToServer(Message message) {
@@ -147,6 +141,6 @@ public class ClientSkeleton extends Thread {
 		Settings.setRemoteHostname(message.getHostname());
 		Settings.setRemotePort(message.getPort());
 		closeSocket();
-		connect();
+		run();
 	}
 }
