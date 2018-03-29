@@ -75,6 +75,7 @@ public class Client {
 		
 			
 		ClientSkeleton c = ClientSkeleton.getInstance();
+		c.connect();
 		c.start();
 				
 			
