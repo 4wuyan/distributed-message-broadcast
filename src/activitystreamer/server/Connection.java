@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger;
 
 import activitystreamer.util.Settings;
 
+import messages.*;
 
 public class Connection extends Thread {
 	private static final Logger log = LogManager.getLogger();
@@ -38,13 +39,17 @@ public class Connection extends Thread {
 	/*
 	 * returns true if the message was written, otherwise false
 	 */
-	public boolean writeMsg(String msg) {
+	private boolean writeMsg(String msg) {
 		if(open){
 			outwriter.println(msg);
 			outwriter.flush();
 			return true;	
 		}
 		return false;
+	}
+
+	public void sendMessage(Message message) {
+		writeMsg(message.toString());
 	}
 	
 	public void closeCon(){
@@ -67,6 +72,7 @@ public class Connection extends Thread {
 			String data;
 			while(!term && (data = inreader.readLine())!=null){
 				term=Control.getInstance().process(this,data);
+				log.info(data);
 			}
 			log.debug("connection closed to "+Settings.socketAddress(socket));
 			Control.getInstance().connectionClosed(this);

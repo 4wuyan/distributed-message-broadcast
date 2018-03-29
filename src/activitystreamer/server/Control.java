@@ -4,14 +4,19 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import activitystreamer.util.Settings;
 
+import messages.*;
+
 public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
 	private static ArrayList<Connection> connections;
+	private static ArrayList<Connection> serverConnections;
 	private static boolean term=false;
 	private static Listener listener;
 	
@@ -27,6 +32,7 @@ public class Control extends Thread {
 	public Control() {
 		// initialize the connections array
 		connections = new ArrayList<Connection>();
+		serverConnections = new ArrayList<Connection>();
 		// start a listener
 		try {
 			listener = new Listener();
@@ -53,7 +59,33 @@ public class Control extends Thread {
 	 * Return true if the connection should close.
 	 */
 	public synchronized boolean process(Connection con,String msg){
-		return true;
+		String command;
+		boolean shouldExit = false;
+		try {
+			command = Message.getCommandFromJson(msg);
+			switch (command) {
+				case "LOGIN": clientLogin(msg); break;
+				case "ACTIVITY_BROADCAST": break;
+				default:
+					// other commands.
+					shouldExit = true; break;
+			}
+		} catch (IllegalStateException|JsonSyntaxException e) {
+			log.debug("failed to parse an incoming message in json");
+			shouldExit = true;
+		}
+		return shouldExit;
+	}
+
+	private void clientLogin(String string) {
+		LoginMessage message = new Gson().fromJson(string, LoginMessage.class);
+		String username, secret;
+		username = message.getUsername();
+		secret = message.getSecret();
+		if(!username.equals("anonymous")) {
+
+		}
+
 	}
 	
 	/*
@@ -67,11 +99,10 @@ public class Control extends Thread {
 	 * A new incoming connection has been established, and a reference is returned to it
 	 */
 	public synchronized Connection incomingConnection(Socket s) throws IOException{
-		log.debug("incomming connection: "+Settings.socketAddress(s));
+		log.debug("incoming connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
 		connections.add(c);
 		return c;
-		
 	}
 	
 	/*
@@ -80,9 +111,12 @@ public class Control extends Thread {
 	public synchronized Connection outgoingConnection(Socket s) throws IOException{
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
+		String secret = Settings.getSecret();
+		AuthenticateMessage message = new AuthenticateMessage(secret);
+		c.sendMessage(message);
 		connections.add(c);
+		serverConnections.add(c);
 		return c;
-		
 	}
 	
 	@Override
