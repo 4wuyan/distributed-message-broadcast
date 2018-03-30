@@ -94,10 +94,9 @@ public class Server {
 			Settings.setLocalHostname(cmd.getOptionValue("lh"));
 		}
 
-		if(cmd.hasOption("s")){
-			Settings.setSecret(cmd.getOptionValue("s"));
-		}
-		
+		if(cmd.hasOption("s")) Settings.setSecret(cmd.getOptionValue("s"));
+		else Settings.setSecret(Settings.nextSecret());
+
 		log.info("starting server");
 		
 		

@@ -1,6 +1,7 @@
 package activitystreamer.server;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,7 +45,8 @@ public class Control extends Thread {
 		} catch (IOException e1) {
 			log.fatal("failed to startup a listening thread: "+e1);
 			System.exit(-1);
-		}	
+		}
+		log.info("using given secret: " + Settings.getSecret());
 	}
 	
 	public void initiateConnection(){
@@ -65,7 +67,7 @@ public class Control extends Thread {
 	 */
 	public synchronized boolean process(Connection con,String msg){
 		String command;
-		boolean shouldExit = false;
+		boolean shouldCloseConnection = false;
 		try {
 			command = Message.getCommandFromJson(msg);
 			switch (command) {
@@ -83,13 +85,13 @@ public class Control extends Thread {
 				case "SERVER_ANNOUNCE": break;
 				default:
 					// other commands.
-					shouldExit = true; break;
+					shouldCloseConnection = true; break;
 			}
 		} catch (IllegalStateException|JsonSyntaxException e) {
 			log.debug("failed to parse an incoming message in json");
-			shouldExit = true;
+			shouldCloseConnection = true;
 		}
-		return shouldExit;
+		return shouldCloseConnection;
 	}
 
 	private void processActivity(Connection connection, String string) {
@@ -177,6 +179,12 @@ public class Control extends Thread {
 	 * A new outgoing connection has been established, and a reference is returned to it
 	 */
 	public synchronized Connection outgoingConnection(Socket s) throws IOException{
+	    if(s.getInetAddress().equals(InetAddress.getByName("localhost"))) {
+	        if(s.getPort() == listener.getPortnum()) {
+                log.fatal("Must not connect to yourself!");
+	            throw new IOException();
+			}
+		}
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
 		String secret = Settings.getSecret();
