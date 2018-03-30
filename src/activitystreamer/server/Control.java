@@ -3,6 +3,7 @@ package activitystreamer.server;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -17,6 +18,7 @@ public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
 	private static ArrayList<Connection> connections;
 	private static ArrayList<Connection> serverConnections;
+	private static HashMap<String, String> registeredUsers;
 	private static boolean term=false;
 	private static Listener listener;
 	
@@ -31,8 +33,10 @@ public class Control extends Thread {
 	
 	public Control() {
 		// initialize the connections array
-		connections = new ArrayList<Connection>();
-		serverConnections = new ArrayList<Connection>();
+		connections = new ArrayList<>();
+		serverConnections = new ArrayList<>();
+
+		registeredUsers = new HashMap<>();
 		// start a listener
 		try {
 			listener = new Listener();
@@ -64,7 +68,7 @@ public class Control extends Thread {
 		try {
 			command = Message.getCommandFromJson(msg);
 			switch (command) {
-				case "LOGIN": clientLogin(msg); break;
+				case "LOGIN": clientLogin(con, msg); break;
 				case "ACTIVITY_BROADCAST": break;
 				default:
 					// other commands.
@@ -77,17 +81,36 @@ public class Control extends Thread {
 		return shouldExit;
 	}
 
-	private void clientLogin(String string) {
+	private void clientLogin(Connection connection, String string) {
 		LoginMessage message = new Gson().fromJson(string, LoginMessage.class);
 		String username, secret;
 		username = message.getUsername();
 		secret = message.getSecret();
-		if(!username.equals("anonymous")) {
 
+		boolean isSuccessful = checkUsernameSecret(username, secret);
+		Message reply;
+		String replyInfo;
+		if(isSuccessful) {
+			replyInfo = "logged in as user " + username;
+			reply = new LoginSuccessMessage(replyInfo);
+		} else {
+			if (registeredUsers.containsKey(username))
+			    replyInfo = "wrong secret for user " + username;
+			else
+				replyInfo = "user "+username+" is not registered";
+			reply = new LoginFailedMessage(replyInfo);
 		}
-
+		connection.sendMessage(reply);
 	}
-	
+
+	private boolean checkUsernameSecret(String username, String secret) {
+		if(username.equals("anonymous")) return true;
+		if(! registeredUsers.containsKey(username)) return false;
+
+        String storedSecret = registeredUsers.get(username);
+        if(storedSecret.equals(secret)) return true;
+        else return false;
+	}
 	/*
 	 * The connection has been closed by the other party.
 	 */
