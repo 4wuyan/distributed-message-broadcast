@@ -1,7 +1,7 @@
 package activitystreamer.client;
 
 import java.io.*;
-import java.net.Socket;
+import java.net.*;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -19,7 +19,8 @@ public class ClientSkeleton extends Thread {
 	private Socket socket;
 	private TextFrame textFrame;
 	private PrintWriter out;
-	
+	private BufferedReader in;
+
 
 	
 	public static ClientSkeleton getInstance(){
@@ -33,13 +34,13 @@ public class ClientSkeleton extends Thread {
 		textFrame = new TextFrame();
 	}
 
-	public void run() {
+	public void connect() {
 		int remotePort = Settings.getRemotePort();
 		String remoteHostname = Settings.getRemoteHostname();
 		try {
 			socket = new Socket(remoteHostname, remotePort);
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			out = new PrintWriter(socket.getOutputStream(), true);
-			new Receiver(socket).start();
 		} catch (IOException e) {
 			log.fatal("failed to establish the socket connection: "+e);
 			System.exit(-1);
@@ -61,6 +62,26 @@ public class ClientSkeleton extends Thread {
 			}
 		}
 		sendMessageToServer(message);
+	}
+
+	public void run() {
+		while (true) {
+			String response;
+			try {
+				response = in.readLine();
+			} catch (SocketException e) {
+				// Happens when Client disconnects first
+				log.info("socket closed");
+				break;
+			} catch (IOException e) {
+				log.error("error in reading from the socket");
+				break;
+			}
+			log.info(response);
+			processReplyString(response);
+		}
+		// Make sure we close the socket
+		closeSocket();
 	}
 	
 
@@ -141,6 +162,6 @@ public class ClientSkeleton extends Thread {
 		Settings.setRemoteHostname(message.getHostname());
 		Settings.setRemotePort(message.getPort());
 		closeSocket();
-		run();
+		connect();
 	}
 }
