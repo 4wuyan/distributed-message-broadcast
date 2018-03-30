@@ -89,7 +89,7 @@ public class ClientSkeleton extends Thread {
 	public void sendActivityObject(JSONObject activityObj){
 		String username = Settings.getUsername();
 		String secret = Settings.getSecret();
-		ActivityMessage message = new ActivityMessage(username, secret, activityObj);
+		ActivityMessageMessage message = new ActivityMessageMessage(username, secret, activityObj);
 		sendMessageToServer(message);
 	}
 	

@@ -13,6 +13,7 @@ import org.apache.logging.log4j.Logger;
 import activitystreamer.util.Settings;
 
 import messages.*;
+import org.json.simple.JSONObject;
 
 public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
@@ -69,7 +70,17 @@ public class Control extends Thread {
 			command = Message.getCommandFromJson(msg);
 			switch (command) {
 				case "LOGIN": clientLogin(con, msg); break;
-				case "ACTIVITY_BROADCAST": break;
+				case "ACTIVITY_MESSAGE": processActivity(con, msg); break;
+				case "ACTIVITY_BROADCAST":
+					broadcastActivity(con, msg);
+					break;
+				case "REGISTER": break;
+				case "AUTHENTICATE": break;
+				case "LOCK_REQUEST": break;
+				case "LOCK_ALLOWED": break;
+				case "LOCK_DENIED": break;
+				case "LOGOUT": break;
+				case "SERVER_ANNOUNCE": break;
 				default:
 					// other commands.
 					shouldExit = true; break;
@@ -79,6 +90,32 @@ public class Control extends Thread {
 			shouldExit = true;
 		}
 		return shouldExit;
+	}
+
+	private void processActivity(Connection connection, String string) {
+		ActivityMessageMessage message =
+			new Gson().fromJson(string, ActivityMessageMessage.class);
+
+		String username = message.getUsername();
+		String secret = message.getSecret();
+		boolean isValid = checkUsernameSecret(username, secret);
+		Message reply;
+		if(isValid) {
+			JSONObject activity = message.getActivity();
+			activity.put("authenticated_user", username);
+			reply = new ActivityBroadcastMessage(activity);
+			forwardMessage(reply, connection, connections);
+		} else {
+			String info = "username and/or secret is incorrect";
+			reply = new AuthenticationFailMessage(info);
+		}
+		connection.sendMessage(reply);
+	}
+
+	private void broadcastActivity(Connection connection, String string) {
+		ActivityBroadcastMessage message =
+			new Gson().fromJson(string, ActivityBroadcastMessage.class);
+		forwardMessage(message, connection, connections);
 	}
 
 	private void clientLogin(Connection connection, String string) {
@@ -110,6 +147,14 @@ public class Control extends Thread {
         String storedSecret = registeredUsers.get(username);
         if(storedSecret.equals(secret)) return true;
         else return false;
+	}
+
+	private void forwardMessage(Message message, Connection from, ArrayList<Connection> group) {
+		for(Connection connection: group) {
+			if (connection != from) {
+				connection.sendMessage(message);
+			}
+		}
 	}
 	/*
 	 * The connection has been closed by the other party.
