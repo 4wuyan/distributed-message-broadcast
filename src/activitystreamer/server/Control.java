@@ -21,6 +21,7 @@ public class Control extends Thread {
 	private static ArrayList<Connection> connections;
 	private static ArrayList<Connection> serverConnections;
 	private static HashMap<String, String> registeredUsers;
+	private static HashMap<String, LockManager> lockManagers;
 	private static boolean term=false;
 	private static Listener listener;
 	
@@ -39,6 +40,7 @@ public class Control extends Thread {
 		serverConnections = new ArrayList<>();
 
 		registeredUsers = new HashMap<>();
+		lockManagers = new HashMap<>();
 		// start a listener
 		try {
 			listener = new Listener();
@@ -67,34 +69,104 @@ public class Control extends Thread {
 	 */
 	public synchronized boolean process(Connection con,String msg){
 		String command;
-		boolean shouldCloseConnection = false;
+		boolean shouldClose = false;
 		try {
 			command = Message.getCommandFromJson(msg);
 			switch (command) {
-				case "LOGIN": clientLogin(con, msg); break;
-				case "ACTIVITY_MESSAGE": processActivity(con, msg); break;
+				case "LOGIN":
+					shouldClose = processLogin(con, msg); break;
+				case "ACTIVITY_MESSAGE":
+					shouldClose = processActivityMessage(con, msg); break;
 				case "ACTIVITY_BROADCAST":
-					broadcastActivity(con, msg);
+					shouldClose = processActivityBroadcast(con, msg); break;
+				case "REGISTER":
+					shouldClose = processRegister(con, msg);
 					break;
-				case "REGISTER": break;
-				case "AUTHENTICATE": break;
-				case "LOCK_REQUEST": break;
+				case "AUTHENTICATE":
+					//authenticate(con, msg);
+					break;
+				case "LOCK_REQUEST":
+					shouldClose = processLockRequest(con, msg); break;
 				case "LOCK_ALLOWED": break;
 				case "LOCK_DENIED": break;
 				case "LOGOUT": break;
 				case "SERVER_ANNOUNCE": break;
 				default:
 					// other commands.
-					shouldCloseConnection = true; break;
+					shouldClose = true; break;
 			}
 		} catch (IllegalStateException|JsonSyntaxException e) {
 			log.debug("failed to parse an incoming message in json");
-			shouldCloseConnection = true;
+			InvalidMessageMessage reply;
+			reply = new InvalidMessageMessage("your message is invalid");
+			con.sendMessage(reply);
+			shouldClose = true;
 		}
-		return shouldCloseConnection;
+		return shouldClose;
 	}
 
-	private void processActivity(Connection connection, String string) {
+	private boolean processLockRequest(Connection connection, String string) {
+		if (!connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+		LockRequestMessage message = new Gson().fromJson(string, LockRequestMessage.class);
+		String username = message.getUsername();
+		String secret = message.getSecret();
+
+		///
+		///
+		///
+
+		return false;
+	}
+
+	private boolean processRegister(Connection connection, String string) {
+		RegisterMessage message = new Gson().fromJson(string, RegisterMessage.class);
+		String username = message.getUsername();
+		String secret = message.getSecret();
+		if (connection.isAuthenticated()) {
+			String info = "received REGISTER from a client that has already logged in as"+username;
+			connection.sendMessage(new InvalidMessageMessage(info));
+			return true;
+		}
+		boolean shouldClose = false;
+
+		String successInfo = "register success for "+username;
+		String failedInfo = username+" is already registered with the system";
+		RegisterSuccessMessage successMessage = new RegisterSuccessMessage(successInfo);
+		RegisterFailedMessage failedMessage = new RegisterFailedMessage(failedInfo);
+		if(registeredUsers.containsKey(username)) {
+		    connection.sendMessage(failedMessage);
+		    shouldClose = true;
+		} else {
+			LockManager lockManager = new LockManager
+				(serverConnections, connection, successMessage, failedMessage);
+			lockManagers.put(username, lockManager);
+
+			LockRequestMessage request = new LockRequestMessage(username, secret);
+			forwardMessage(request, connection, serverConnections);
+		}
+		return shouldClose;
+	}
+
+	/*
+	private void authenticate(Connection connection, String string) {
+		AuthenticateMessage message = new Gson().fromJson(string, AuthenticateMessage.class);
+		String secret = message.getSecret();
+		Message reply;
+		if(secret.equals(Settings.getSecret())) {
+			reply = new AuthenticateMessage()
+		}
+	}
+	*/
+
+	private boolean processActivityMessage(Connection connection, String string) {
+		if (!connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("must send a LOGIN message first"));
+			return true;
+		}
+
 		ActivityMessageMessage message =
 			new Gson().fromJson(string, ActivityMessageMessage.class);
 
@@ -112,15 +184,22 @@ public class Control extends Thread {
 			reply = new AuthenticationFailMessage(info);
 		}
 		connection.sendMessage(reply);
+
+		return !isValid;
 	}
 
-	private void broadcastActivity(Connection connection, String string) {
-		ActivityBroadcastMessage message =
-			new Gson().fromJson(string, ActivityBroadcastMessage.class);
-		forwardMessage(message, connection, connections);
+	private boolean processActivityBroadcast(Connection connection, String string) {
+		if (!connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+        ActivityBroadcastMessage message =
+                new Gson().fromJson(string, ActivityBroadcastMessage.class);
+        forwardMessage(message, connection, connections);
+		return false;
 	}
 
-	private void clientLogin(Connection connection, String string) {
+	private boolean processLogin(Connection connection, String string) {
 		LoginMessage message = new Gson().fromJson(string, LoginMessage.class);
 		String username, secret;
 		username = message.getUsername();
@@ -132,6 +211,12 @@ public class Control extends Thread {
 		if(isSuccessful) {
 			replyInfo = "logged in as user " + username;
 			reply = new LoginSuccessMessage(replyInfo);
+			connection.setAuthenticated(true);
+			/*
+
+			CHECK REDIRECT!!!!
+
+			 */
 		} else {
 			if (registeredUsers.containsKey(username))
 			    replyInfo = "wrong secret for user " + username;
@@ -140,6 +225,7 @@ public class Control extends Thread {
 			reply = new LoginFailedMessage(replyInfo);
 		}
 		connection.sendMessage(reply);
+		return !isSuccessful;
 	}
 
 	private boolean checkUsernameSecret(String username, String secret) {
@@ -147,15 +233,12 @@ public class Control extends Thread {
 		if(! registeredUsers.containsKey(username)) return false;
 
         String storedSecret = registeredUsers.get(username);
-        if(storedSecret.equals(secret)) return true;
-        else return false;
+		return storedSecret.equals(secret);
 	}
 
 	private void forwardMessage(Message message, Connection from, ArrayList<Connection> group) {
 		for(Connection connection: group) {
-			if (connection != from) {
-				connection.sendMessage(message);
-			}
+			if (connection != from) connection.sendMessage(message);
 		}
 	}
 	/*
