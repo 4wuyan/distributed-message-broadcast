@@ -22,7 +22,7 @@ public class Connection extends Thread {
 	private DataOutputStream out;
 	private BufferedReader inreader;
 	private PrintWriter outwriter;
-	private boolean open = false;
+	private boolean open;
 	private Socket socket;
 	private boolean term=false;
 	private boolean authenticated = false;
@@ -50,7 +50,7 @@ public class Connection extends Thread {
 		return false;
 	}
 
-	public void sendMessage(Message message) {
+	public synchronized void sendMessage(Message message) {
 		writeMsg(message.toString());
 	}
 	
@@ -86,14 +86,6 @@ public class Connection extends Thread {
 		open=false;
 	}
 	
-	public Socket getSocket() {
-		return socket;
-	}
-	
-	public boolean isOpen() {
-		return open;
-	}
-
 	public boolean isAuthenticated() {
 		return authenticated;
 	}

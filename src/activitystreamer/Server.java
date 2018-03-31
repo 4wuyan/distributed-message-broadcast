@@ -102,7 +102,7 @@ public class Server {
 		
 		final Control c = Control.getInstance();
 		if(cmd.hasOption("rh")) c.initiateConnection();
-//		c.start();
+		c.start();
 
 
 		// the following shutdown hook doesn't really work, it doesn't give us enough time to

@@ -100,7 +100,7 @@ public class ClientSkeleton extends Thread {
 		System.exit(0);
 	}
 
-	public void closeSocket() {
+	private void closeSocket() {
 	    if (!socket.isClosed()) {
 			try {
 				socket.close();
@@ -121,7 +121,7 @@ public class ClientSkeleton extends Thread {
 		textFrame.setOutputText(activity);
 	}
 
-	public void processReplyString(String response) {
+	private void processReplyString(String response) {
 		String command;
 		boolean shouldExit = false;
 		try {

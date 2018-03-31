@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -28,10 +27,8 @@ public class Control extends Thread {
 	private Listener listener;
 	private String serverId;
 	private HashMap<String, InetSocketAddress> redirectServers;
-	private String localHostname;
-	private int localPort;
 
-	protected static Control control = null;
+	private static Control control = null;
 	
 	public static Control getInstance() {
 		if(control==null){
@@ -39,21 +36,13 @@ public class Control extends Thread {
 		} 
 		return control;
 	}
-	
-	public Control() {
+
+	private Control() {
 		// initialize the connections array
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
 		serverId = Settings.nextSecret();
 		redirectServers = new HashMap<>();
-
-		localPort = Settings.getLocalPort();
-		try {
-			localHostname = InetAddress.getLocalHost().getHostAddress();
-			log.info("Local hostname is: "+localHostname);
-		} catch (UnknownHostException e) {
-		    log.error("Can't get server's hostname");
-		}
 
 		registeredUsers = new HashMap<>();
 		lockManagers = new HashMap<>();
@@ -69,14 +58,20 @@ public class Control extends Thread {
 	
 	public void initiateConnection(){
 		// make a connection to another server if remote hostname is supplied
-		if(Settings.getRemoteHostname()!=null){
-			try {
-				outgoingConnection(new Socket(Settings.getRemoteHostname(),Settings.getRemotePort()));
-			} catch (IOException e) {
-				log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
-				System.exit(-1);
-			}
-		}
+		if(Settings.getRemoteHostname()==null) return;
+
+        try {
+            Connection c = outgoingConnection(
+                new Socket(Settings.getRemoteHostname(),Settings.getRemotePort())
+			);
+			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
+			c.sendMessage(message);
+			c.setAuthenticated(true);
+        } catch (IOException e) {
+            log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
+            System.exit(-1);
+        }
+
 	}
 	
 	/*
@@ -85,7 +80,7 @@ public class Control extends Thread {
 	 */
 	public synchronized boolean process(Connection con,String msg){
 		String command;
-		boolean shouldClose = false;
+		boolean shouldClose;
 		try {
 			command = Message.getCommandFromJson(msg);
 			switch (command) {
@@ -213,7 +208,7 @@ public class Control extends Thread {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 		if (connection.isAuthenticated()) {
-			String info = "received REGISTER from a client that has already logged in as"+username;
+			String info = "received REGISTER from a client that has already logged in as "+username;
 			connection.sendMessage(new InvalidMessageMessage(info));
 			return true;
 		}
@@ -258,6 +253,7 @@ public class Control extends Thread {
 		String secret = message.getSecret();
 		boolean shouldClose = false;
 		if(secret.equals(Settings.getSecret())) {
+		    connection.setAuthenticated(true);
 		    serverConnections.add(connection);
 		}
 		else {
@@ -267,6 +263,7 @@ public class Control extends Thread {
 		return shouldClose;
 	}
 
+	@SuppressWarnings("unchecked")
 	private boolean processActivityMessage(Connection connection, String string) {
 		if (!connection.isAuthenticated()) {
 			connection.sendMessage(new InvalidMessageMessage("must send a LOGIN message first"));
@@ -348,8 +345,7 @@ public class Control extends Thread {
 		return storedSecret.equals(secret);
 	}
 
-	private synchronized void forwardMessage (Message message, Connection from,
-											  HashSet<Connection> group) {
+	private void forwardMessage (Message message, Connection from, HashSet<Connection> group) {
 		for(Connection connection: group) {
 			if (connection != from) connection.sendMessage(message);
 		}
@@ -359,34 +355,30 @@ public class Control extends Thread {
 	 * The connection has been closed by the other party.
 	 */
 	public synchronized void connectionClosed(Connection con){
-		if(!term) connections.remove(con);
+		if(!term){
+			connections.remove(con);
+			serverConnections.remove(con);
+		}
 	}
 	
-	/*
-	 * A new incoming connection has been established, and a reference is returned to it
-	 */
-	public synchronized Connection incomingConnection(Socket s) throws IOException{
+	public synchronized void incomingConnection(Socket s) throws IOException{
 		log.debug("incoming connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
 		connections.add(c);
-		return c;
 	}
 	
 	/*
 	 * A new outgoing connection has been established, and a reference is returned to it
 	 */
-	public synchronized Connection outgoingConnection(Socket s) throws IOException{
+	private synchronized Connection outgoingConnection(Socket s) throws IOException{
 	    if(s.getInetAddress().equals(InetAddress.getByName("localhost"))) {
-	        if(s.getPort() == localPort) {
+	        if(s.getPort() == Settings.getLocalPort()) {
                 log.fatal("Must not connect to yourself!");
 	            throw new IOException();
 			}
 		}
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
-		String secret = Settings.getSecret();
-		AuthenticateMessage message = new AuthenticateMessage(secret);
-		c.sendMessage(message);
 		connections.add(c);
 		serverConnections.add(c);
 		return c;
@@ -417,10 +409,12 @@ public class Control extends Thread {
 		listener.setTerm(true);
 	}
 	
-	public boolean doActivity(){
+	private boolean doActivity(){
 	    ServerAnnounceMessage message;
 	    int load = connections.size() - serverConnections.size();
-	    message = new ServerAnnounceMessage(serverId, load, localHostname, localPort);
+	    String hostname = Settings.getLocalHostname();
+	    int port = Settings.getLocalPort();
+	    message = new ServerAnnounceMessage(serverId, load, hostname, port);
 
 	    forwardMessage(message, null, serverConnections);
 		return false;
@@ -428,9 +422,5 @@ public class Control extends Thread {
 	
 	public final void setTerm(boolean t){
 		term=t;
-	}
-	
-	public final HashSet<Connection> getConnections() {
-		return connections;
 	}
 }
