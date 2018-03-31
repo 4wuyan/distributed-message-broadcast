@@ -85,7 +85,8 @@ public class Control extends Thread {
 					shouldClose = authenticate(con, msg); break;
 				case "LOCK_REQUEST":
 					shouldClose = processLockRequest(con, msg); break;
-				case "LOCK_ALLOWED": break;
+				case "LOCK_ALLOWED":
+					shouldClose = processLockAllowed(con, msg); break;
 				case "LOCK_DENIED": break;
 				case "LOGOUT": break;
 				case "SERVER_ANNOUNCE": break;
@@ -103,6 +104,20 @@ public class Control extends Thread {
 		return shouldClose;
 	}
 
+	private boolean processLockAllowed(Connection connection, String string) {
+		if (!connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
+		String username = message.getUsername();
+		LockManager lockManager = lockManagers.get(username);
+		lockManager.addApproval(connection);
+		if (lockManager.allApproved()) lockManager.sendSuccessMessage();
+		return false;
+	}
+
 	private boolean processLockRequest(Connection connection, String string) {
 		if (!connection.isAuthenticated()) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
@@ -113,11 +128,12 @@ public class Control extends Thread {
 		String secret = message.getSecret();
 
 		LockDeniedMessage failedMessage = new LockDeniedMessage(username, secret);
-		if (registeredUsers.containsKey(username)) {
-		    connection.sendMessage(failedMessage);
-		    return true;
-		}
+		if (registeredUsers.containsKey(username)) connection.sendMessage(failedMessage);
 		LockAllowedMessage successMessage = new LockAllowedMessage(username, secret);
+		if (serverConnections.size() == 0) {
+			// the server is a leaf
+			connection.sendMessage(successMessage);
+		}
 		LockManager lockManager = new LockManager
 				(serverConnections, connection, successMessage, failedMessage);
 		lockManagers.put(username, lockManager);

@@ -8,4 +8,8 @@ public class LockAllowedMessage extends Message {
         this.username = username;
         this.secret = secret;
     }
+
+    public String getUsername() {
+        return username;
+    }
 }
