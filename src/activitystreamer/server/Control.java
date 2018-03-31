@@ -18,13 +18,15 @@ import org.json.simple.JSONObject;
 
 public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
-	private static HashSet<Connection> connections;
-	private static HashSet<Connection> serverConnections;
-	private static HashMap<String, String> registeredUsers;
-	private static HashMap<String, LockManager> lockManagers;
-	private static boolean term=false;
-	private static Listener listener;
-	
+	private HashSet<Connection> connections;
+	private HashSet<Connection> serverConnections;
+	private HashMap<String, String> registeredUsers;
+	private HashMap<String, LockManager> lockManagers;
+	private boolean term=false;
+	private Listener listener;
+	private String serverId;
+	private HashMap<String, ServerStatus> redirectServers;
+
 	protected static Control control = null;
 	
 	public static Control getInstance() {
@@ -38,6 +40,8 @@ public class Control extends Thread {
 		// initialize the connections array
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
+		serverId = Settings.nextSecret();
+		redirectServers = new HashMap<>();
 
 		registeredUsers = new HashMap<>();
 		lockManagers = new HashMap<>();
@@ -89,8 +93,10 @@ public class Control extends Thread {
 					shouldClose = processLockAllowed(con, msg); break;
 				case "LOCK_DENIED":
 					shouldClose = processLockDenied(con, msg); break;
-				case "LOGOUT": break;
-				case "SERVER_ANNOUNCE": break;
+				case "LOGOUT":
+					shouldClose = true; break;
+				case "SERVER_ANNOUNCE":
+					shouldClose = processServerAnnounce(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
@@ -103,6 +109,30 @@ public class Control extends Thread {
 			shouldClose = true;
 		}
 		return shouldClose;
+	}
+
+	private boolean processServerAnnounce(Connection connection, String string) {
+		if (!connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
+		int load = message.getLoad();
+		String id = message.getId();
+		int numberOfClient = connections.size() - serverConnections.size();
+
+		if (numberOfClient - load > 2) {
+			String hostname = message.getHostname();
+			int port = message.getPort();
+			ServerStatus status = new ServerStatus(load, hostname, port);
+			redirectServers.put(id, status);
+		} else {
+			redirectServers.remove(id);
+		}
+
+		forwardMessage(message, connection, serverConnections);
+		return false;
 	}
 
 	private boolean processLockDenied(Connection connection, String string) {
@@ -152,7 +182,7 @@ public class Control extends Thread {
 		LockAllowedMessage successMessage = new LockAllowedMessage(username, secret);
 		if (registeredUsers.containsKey(username)) {
 			connection.sendMessage(failedMessage);
-		} else if (serverConnections.size() == 0) {
+		} else if (serverConnections.isEmpty()) {
             // the server is a leaf
             connection.sendMessage(successMessage);
             registeredUsers.put(username, secret);

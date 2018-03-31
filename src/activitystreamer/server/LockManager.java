@@ -23,7 +23,7 @@ class LockManager {
     }
 
     public boolean allApproved() {
-        return waitForApproval.size() == 0;
+        return waitForApproval.isEmpty();
     }
 
     public void addApproval(Connection connection) {
