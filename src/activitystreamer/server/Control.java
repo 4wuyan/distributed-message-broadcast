@@ -3,8 +3,8 @@ package activitystreamer.server;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -18,8 +18,8 @@ import org.json.simple.JSONObject;
 
 public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
-	private static ArrayList<Connection> connections;
-	private static ArrayList<Connection> serverConnections;
+	private static HashSet<Connection> connections;
+	private static HashSet<Connection> serverConnections;
 	private static HashMap<String, String> registeredUsers;
 	private static HashMap<String, LockManager> lockManagers;
 	private static boolean term=false;
@@ -36,8 +36,8 @@ public class Control extends Thread {
 	
 	public Control() {
 		// initialize the connections array
-		connections = new ArrayList<>();
-		serverConnections = new ArrayList<>();
+		connections = new HashSet<>();
+		serverConnections = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
 		lockManagers = new HashMap<>();
@@ -80,11 +80,9 @@ public class Control extends Thread {
 				case "ACTIVITY_BROADCAST":
 					shouldClose = processActivityBroadcast(con, msg); break;
 				case "REGISTER":
-					shouldClose = processRegister(con, msg);
-					break;
+					shouldClose = processRegister(con, msg); break;
 				case "AUTHENTICATE":
-					//authenticate(con, msg);
-					break;
+					shouldClose = authenticate(con, msg); break;
 				case "LOCK_REQUEST":
 					shouldClose = processLockRequest(con, msg); break;
 				case "LOCK_ALLOWED": break;
@@ -114,10 +112,17 @@ public class Control extends Thread {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 
-		///
-		///
-		///
+		LockDeniedMessage failedMessage = new LockDeniedMessage(username, secret);
+		if (registeredUsers.containsKey(username)) {
+		    connection.sendMessage(failedMessage);
+		    return true;
+		}
+		LockAllowedMessage successMessage = new LockAllowedMessage(username, secret);
+		LockManager lockManager = new LockManager
+				(serverConnections, connection, successMessage, failedMessage);
+		lockManagers.put(username, lockManager);
 
+		forwardMessage(message, connection, serverConnections);
 		return false;
 	}
 
@@ -150,16 +155,24 @@ public class Control extends Thread {
 		return shouldClose;
 	}
 
-	/*
-	private void authenticate(Connection connection, String string) {
+	private boolean authenticate(Connection connection, String string) {
+		if (connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("already authenticated"));
+			return true;
+		}
+
 		AuthenticateMessage message = new Gson().fromJson(string, AuthenticateMessage.class);
 		String secret = message.getSecret();
-		Message reply;
+		boolean shouldClose = false;
 		if(secret.equals(Settings.getSecret())) {
-			reply = new AuthenticateMessage()
+		    serverConnections.add(connection);
 		}
+		else {
+			connection.sendMessage(new AuthenticationFailMessage("secret incorrect"));
+			shouldClose = true;
+		}
+		return shouldClose;
 	}
-	*/
 
 	private boolean processActivityMessage(Connection connection, String string) {
 		if (!connection.isAuthenticated()) {
@@ -236,7 +249,7 @@ public class Control extends Thread {
 		return storedSecret.equals(secret);
 	}
 
-	private void forwardMessage(Message message, Connection from, ArrayList<Connection> group) {
+	private void forwardMessage(Message message, Connection from, HashSet<Connection> group) {
 		for(Connection connection: group) {
 			if (connection != from) connection.sendMessage(message);
 		}
@@ -311,7 +324,7 @@ public class Control extends Thread {
 		term=t;
 	}
 	
-	public final ArrayList<Connection> getConnections() {
+	public final HashSet<Connection> getConnections() {
 		return connections;
 	}
 }

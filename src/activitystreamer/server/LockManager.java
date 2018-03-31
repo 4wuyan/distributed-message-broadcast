@@ -2,7 +2,6 @@ package activitystreamer.server;
 
 import messages.Message;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 
 class LockManager {
@@ -10,7 +9,7 @@ class LockManager {
     private Connection upstream;
     private Message successMessage, failedMessage;
 
-    LockManager(ArrayList<Connection> connections, Connection upstream,
+    LockManager(HashSet<Connection> connections, Connection upstream,
         Message successMessage, Message failedMessage) {
         this.upstream = upstream;
         this.successMessage = successMessage;
