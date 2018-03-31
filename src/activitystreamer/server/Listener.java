@@ -11,11 +11,11 @@ import activitystreamer.util.Settings;
 
 public class Listener extends Thread{
 	private static final Logger log = LogManager.getLogger();
-	private ServerSocket serverSocket=null;
+	private ServerSocket serverSocket;
 	private boolean term = false;
 	private int portnum;
 	
-	public Listener() throws IOException{
+	Listener() throws IOException{
 		portnum = Settings.getLocalPort(); // keep our own copy in case it changes later
 		serverSocket = new ServerSocket(portnum);
 		start();

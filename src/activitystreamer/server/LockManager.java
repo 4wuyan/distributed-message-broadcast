@@ -10,10 +10,10 @@ class LockManager {
     private Message successMessage, failedMessage;
 
     LockManager(HashSet<Connection> connections, Connection upstream,
-        Message successMessage, Message failedMessage) {
+        Message successMessage) {
         this.upstream = upstream;
         this.successMessage = successMessage;
-        this.failedMessage = failedMessage;
+        this.failedMessage = null;
 
         waitForApproval = new HashSet<>();
         for(Connection connection : connections) {
@@ -31,10 +31,14 @@ class LockManager {
     }
 
     public void sendFailMessage() {
-        upstream.sendMessage(failedMessage);
+        if (failedMessage != null) upstream.sendMessage(failedMessage);
     }
 
     public void sendSuccessMessage() {
         upstream.sendMessage(successMessage);
+    }
+
+    public void setFailedMessage(Message failedMessage) {
+        this.failedMessage = failedMessage;
     }
 }

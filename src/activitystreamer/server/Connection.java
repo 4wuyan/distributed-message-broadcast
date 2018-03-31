@@ -37,21 +37,12 @@ public class Connection extends Thread {
 	    open = true;
 	    start();
 	}
-	
-	/*
-	 * returns true if the message was written, otherwise false
-	 */
-	private boolean writeMsg(String msg) {
-		if(open){
-			outwriter.println(msg);
-			outwriter.flush();
-			return true;	
-		}
-		return false;
-	}
 
 	public synchronized void sendMessage(Message message) {
-		writeMsg(message.toString());
+		if(open){
+			outwriter.println(message.toString());
+			outwriter.flush();
+		}
 	}
 	
 	public void closeCon(){

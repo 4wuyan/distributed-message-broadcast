@@ -152,7 +152,10 @@ public class Control extends Thread {
 		String username=  message.getUsername();
 
 		if(registeredUsers.containsKey(username)) registeredUsers.remove(username);
-		if(lockManagers.containsKey(username)) lockManagers.remove(username);
+		if(lockManagers.containsKey(username)) {
+			lockManagers.get(username).sendFailMessage();
+			lockManagers.remove(username);
+		}
 
 		forwardMessage(message, connection, serverConnections);
 		return false;
@@ -195,7 +198,7 @@ public class Control extends Thread {
             registeredUsers.put(username, secret);
         } else {
 			LockManager lockManager = new LockManager
-					(serverConnections, connection, successMessage, failedMessage);
+					(serverConnections, connection, successMessage);
 			lockManagers.put(username, lockManager);
 
 			forwardMessage(message, connection, serverConnections);
@@ -233,7 +236,8 @@ public class Control extends Thread {
 				connection.sendMessage(successMessage);
 			} else {
 				LockManager lockManager = new LockManager
-						(serverConnections, connection, successMessage, failedMessage);
+						(serverConnections, connection, successMessage);
+				lockManager.setFailedMessage(failedMessage);
 				lockManagers.put(username, lockManager);
 
 				LockRequestMessage request = new LockRequestMessage(username, secret);
