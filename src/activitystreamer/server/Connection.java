@@ -30,12 +30,12 @@ public class Connection extends Thread {
 
 	Connection(Socket socket) throws IOException{
 		in = new DataInputStream(socket.getInputStream());
-	    out = new DataOutputStream(socket.getOutputStream());
-	    inreader = new BufferedReader( new InputStreamReader(in));
-	    outwriter = new PrintWriter(out, true);
-	    this.socket = socket;
-	    open = true;
-	    start();
+		out = new DataOutputStream(socket.getOutputStream());
+		inreader = new BufferedReader( new InputStreamReader(in));
+		outwriter = new PrintWriter(out, true);
+		this.socket = socket;
+		open = true;
+		start();
 	}
 
 	public synchronized void sendMessage(Message message) {
@@ -44,7 +44,7 @@ public class Connection extends Thread {
 			outwriter.flush();
 		}
 	}
-	
+
 	public void closeCon(){
 		if(open){
 			log.info("closing connection "+Settings.socketAddress(socket));
@@ -58,8 +58,8 @@ public class Connection extends Thread {
 			}
 		}
 	}
-	
-	
+
+
 	public void run(){
 		try {
 			String data;
@@ -76,7 +76,7 @@ public class Connection extends Thread {
 		}
 		open=false;
 	}
-	
+
 	public boolean isAuthenticated() {
 		return authenticated;
 	}

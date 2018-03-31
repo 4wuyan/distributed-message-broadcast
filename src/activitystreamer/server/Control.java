@@ -29,11 +29,11 @@ public class Control extends Thread {
 	private HashMap<String, InetSocketAddress> redirectServers;
 
 	private static Control control = null;
-	
+
 	public static Control getInstance() {
 		if(control==null){
 			control=new Control();
-		} 
+		}
 		return control;
 	}
 
@@ -55,25 +55,25 @@ public class Control extends Thread {
 		}
 		log.info("using given secret: " + Settings.getSecret());
 	}
-	
+
 	public void initiateConnection(){
 		// make a connection to another server if remote hostname is supplied
 		if(Settings.getRemoteHostname()==null) return;
 
-        try {
-            Connection c = outgoingConnection(
-                new Socket(Settings.getRemoteHostname(),Settings.getRemotePort())
+		try {
+			Connection c = outgoingConnection(
+				new Socket(Settings.getRemoteHostname(),Settings.getRemotePort())
 			);
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
 			c.setAuthenticated(true);
-        } catch (IOException e) {
-            log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
-            System.exit(-1);
-        }
+		} catch (IOException e) {
+			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
+			System.exit(-1);
+		}
 
 	}
-	
+
 	/*
 	 * Processing incoming messages from the connection.
 	 * Return true if the connection should close.
@@ -193,10 +193,10 @@ public class Control extends Thread {
 		if (registeredUsers.containsKey(username)) {
 			connection.sendMessage(failedMessage);
 		} else if (serverConnections.isEmpty()) {
-            // the server is a leaf
-            connection.sendMessage(successMessage);
-            registeredUsers.put(username, secret);
-        } else {
+			// the server is a leaf
+			connection.sendMessage(successMessage);
+			registeredUsers.put(username, secret);
+		} else {
 			LockManager lockManager = new LockManager
 					(serverConnections, connection, successMessage);
 			lockManagers.put(username, lockManager);
@@ -227,8 +227,8 @@ public class Control extends Thread {
 		RegisterSuccessMessage successMessage = new RegisterSuccessMessage(successInfo);
 		RegisterFailedMessage failedMessage = new RegisterFailedMessage(failedInfo);
 		if(registeredUsers.containsKey(username)) {
-		    connection.sendMessage(failedMessage);
-		    shouldClose = true;
+			connection.sendMessage(failedMessage);
+			shouldClose = true;
 		} else {
 			registeredUsers.put(username, secret);
 			if (serverConnections.isEmpty()) {
@@ -257,8 +257,8 @@ public class Control extends Thread {
 		String secret = message.getSecret();
 		boolean shouldClose = false;
 		if(secret.equals(Settings.getSecret())) {
-		    connection.setAuthenticated(true);
-		    serverConnections.add(connection);
+			connection.setAuthenticated(true);
+			serverConnections.add(connection);
 		}
 		else {
 			connection.sendMessage(new AuthenticationFailMessage("secret incorrect"));
@@ -300,9 +300,9 @@ public class Control extends Thread {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
-        ActivityBroadcastMessage message =
-                new Gson().fromJson(string, ActivityBroadcastMessage.class);
-        forwardMessage(message, connection, connections);
+		ActivityBroadcastMessage message =
+				new Gson().fromJson(string, ActivityBroadcastMessage.class);
+		forwardMessage(message, connection, connections);
 		return false;
 	}
 
@@ -321,18 +321,18 @@ public class Control extends Thread {
 			connection.setAuthenticated(true);
 
 			// check redirect
-            if (!redirectServers.isEmpty()) {
-                InetSocketAddress address = redirectServers.values().iterator().next();
-                String hostname = address.getHostName();
-                int port = address.getPort();
+			if (!redirectServers.isEmpty()) {
+				InetSocketAddress address = redirectServers.values().iterator().next();
+				String hostname = address.getHostName();
+				int port = address.getPort();
 
-                connection.sendMessage(reply); // send the previous login success first
-                reply = new RedirectMessage(hostname, port);
+				connection.sendMessage(reply); // send the previous login success first
+				reply = new RedirectMessage(hostname, port);
 			}
 
 		} else {
 			if (registeredUsers.containsKey(username))
-			    replyInfo = "wrong secret for user " + username;
+				replyInfo = "wrong secret for user " + username;
 			else
 				replyInfo = "user "+username+" is not registered";
 			reply = new LoginFailedMessage(replyInfo);
@@ -345,7 +345,7 @@ public class Control extends Thread {
 		if(username.equals("anonymous")) return true;
 		if(! registeredUsers.containsKey(username)) return false;
 
-        String storedSecret = registeredUsers.get(username);
+		String storedSecret = registeredUsers.get(username);
 		return storedSecret.equals(secret);
 	}
 
@@ -364,21 +364,21 @@ public class Control extends Thread {
 			serverConnections.remove(con);
 		}
 	}
-	
+
 	public synchronized void incomingConnection(Socket s) throws IOException{
 		log.debug("incoming connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
 		connections.add(c);
 	}
-	
+
 	/*
 	 * A new outgoing connection has been established, and a reference is returned to it
 	 */
 	private synchronized Connection outgoingConnection(Socket s) throws IOException{
-	    if(s.getInetAddress().equals(InetAddress.getByName("localhost"))) {
-	        if(s.getPort() == Settings.getLocalPort()) {
-                log.fatal("Must not connect to yourself!");
-	            throw new IOException();
+		if(s.getInetAddress().equals(InetAddress.getByName("localhost"))) {
+			if(s.getPort() == Settings.getLocalPort()) {
+				log.fatal("Must not connect to yourself!");
+				throw new IOException();
 			}
 		}
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
@@ -387,7 +387,7 @@ public class Control extends Thread {
 		serverConnections.add(c);
 		return c;
 	}
-	
+
 	@Override
 	public void run(){
 		log.info("using activity interval of "+Settings.getActivityInterval()+" milliseconds");
@@ -403,7 +403,7 @@ public class Control extends Thread {
 				log.debug("doing activity");
 				term=doActivity();
 			}
-			
+
 		}
 		log.info("closing "+connections.size()+" connections");
 		// clean up
@@ -412,18 +412,18 @@ public class Control extends Thread {
 		}
 		listener.setTerm(true);
 	}
-	
-	private boolean doActivity(){
-	    ServerAnnounceMessage message;
-	    int load = connections.size() - serverConnections.size();
-	    String hostname = Settings.getLocalHostname();
-	    int port = Settings.getLocalPort();
-	    message = new ServerAnnounceMessage(serverId, load, hostname, port);
 
-	    forwardMessage(message, null, serverConnections);
+	private boolean doActivity(){
+		ServerAnnounceMessage message;
+		int load = connections.size() - serverConnections.size();
+		String hostname = Settings.getLocalHostname();
+		int port = Settings.getLocalPort();
+		message = new ServerAnnounceMessage(serverId, load, hostname, port);
+
+		forwardMessage(message, null, serverConnections);
 		return false;
 	}
-	
+
 	public final void setTerm(boolean t){
 		term=t;
 	}

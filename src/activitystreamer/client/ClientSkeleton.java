@@ -22,14 +22,14 @@ public class ClientSkeleton extends Thread {
 	private BufferedReader in;
 
 
-	
+
 	public static ClientSkeleton getInstance(){
 		if(clientSolution==null){
 			clientSolution = new ClientSkeleton();
 		}
 		return clientSolution;
 	}
-	
+
 	private ClientSkeleton(){
 		textFrame = new TextFrame();
 	}
@@ -83,7 +83,7 @@ public class ClientSkeleton extends Thread {
 		// Make sure we close the socket
 		closeSocket();
 	}
-	
+
 
 	@SuppressWarnings("unchecked")
 	public void sendActivityObject(JSONObject activityObj){
@@ -92,8 +92,8 @@ public class ClientSkeleton extends Thread {
 		ActivityMessageMessage message = new ActivityMessageMessage(username, secret, activityObj);
 		sendMessageToServer(message);
 	}
-	
-	
+
+
 	public void disconnect(){
 		sendMessageToServer(new LogoutMessage());
 		closeSocket();
@@ -101,7 +101,7 @@ public class ClientSkeleton extends Thread {
 	}
 
 	private void closeSocket() {
-	    if (!socket.isClosed()) {
+		if (!socket.isClosed()) {
 			try {
 				socket.close();
 			} catch (IOException e) {
