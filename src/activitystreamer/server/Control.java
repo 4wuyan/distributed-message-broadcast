@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -27,6 +28,8 @@ public class Control extends Thread {
 	private Listener listener;
 	private String serverId;
 	private HashMap<String, InetSocketAddress> redirectServers;
+	private String localHostname;
+	private int localPort;
 
 	protected static Control control = null;
 	
@@ -43,6 +46,14 @@ public class Control extends Thread {
 		serverConnections = new HashSet<>();
 		serverId = Settings.nextSecret();
 		redirectServers = new HashMap<>();
+
+		localPort = Settings.getLocalPort();
+		try {
+			localHostname = InetAddress.getLocalHost().getHostAddress();
+			log.info("Local hostname is: "+localHostname);
+		} catch (UnknownHostException e) {
+		    log.error("Can't get server's hostname");
+		}
 
 		registeredUsers = new HashMap<>();
 		lockManagers = new HashMap<>();
@@ -326,7 +337,8 @@ public class Control extends Thread {
 		return storedSecret.equals(secret);
 	}
 
-	private void forwardMessage(Message message, Connection from, HashSet<Connection> group) {
+	private synchronized void forwardMessage (Message message, Connection from,
+											  HashSet<Connection> group) {
 		for(Connection connection: group) {
 			if (connection != from) connection.sendMessage(message);
 		}
@@ -354,7 +366,7 @@ public class Control extends Thread {
 	 */
 	public synchronized Connection outgoingConnection(Socket s) throws IOException{
 	    if(s.getInetAddress().equals(InetAddress.getByName("localhost"))) {
-	        if(s.getPort() == listener.getPortnum()) {
+	        if(s.getPort() == localPort) {
                 log.fatal("Must not connect to yourself!");
 	            throw new IOException();
 			}
@@ -395,6 +407,11 @@ public class Control extends Thread {
 	}
 	
 	public boolean doActivity(){
+	    ServerAnnounceMessage message;
+	    int load = connections.size() - serverConnections.size();
+	    message = new ServerAnnounceMessage(serverId, load, localHostname, localPort);
+
+	    forwardMessage(message, null, serverConnections);
 		return false;
 	}
 	
