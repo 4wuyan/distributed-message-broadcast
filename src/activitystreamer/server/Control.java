@@ -87,7 +87,8 @@ public class Control extends Thread {
 					shouldClose = processLockRequest(con, msg); break;
 				case "LOCK_ALLOWED":
 					shouldClose = processLockAllowed(con, msg); break;
-				case "LOCK_DENIED": break;
+				case "LOCK_DENIED":
+					shouldClose = processLockDenied(con, msg); break;
 				case "LOGOUT": break;
 				case "SERVER_ANNOUNCE": break;
 				default:
@@ -104,6 +105,22 @@ public class Control extends Thread {
 		return shouldClose;
 	}
 
+	private boolean processLockDenied(Connection connection, String string) {
+		if (!connection.isAuthenticated()) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		LockDeniedMessage message = new Gson().fromJson(string, LockDeniedMessage.class);
+		String username=  message.getUsername();
+
+		if(registeredUsers.containsKey(username)) registeredUsers.remove(username);
+		if(lockManagers.containsKey(username)) lockManagers.remove(username);
+
+		forwardMessage(message, connection, serverConnections);
+		return false;
+	}
+
 	private boolean processLockAllowed(Connection connection, String string) {
 		if (!connection.isAuthenticated()) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
@@ -112,9 +129,13 @@ public class Control extends Thread {
 
 		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
 		String username = message.getUsername();
+		String secret = message.getSecret();
 		LockManager lockManager = lockManagers.get(username);
 		lockManager.addApproval(connection);
-		if (lockManager.allApproved()) lockManager.sendSuccessMessage();
+		if (lockManager.allApproved()) {
+			lockManager.sendSuccessMessage();
+			registeredUsers.put(username, secret);
+		}
 		return false;
 	}
 
@@ -128,17 +149,20 @@ public class Control extends Thread {
 		String secret = message.getSecret();
 
 		LockDeniedMessage failedMessage = new LockDeniedMessage(username, secret);
-		if (registeredUsers.containsKey(username)) connection.sendMessage(failedMessage);
 		LockAllowedMessage successMessage = new LockAllowedMessage(username, secret);
-		if (serverConnections.size() == 0) {
-			// the server is a leaf
-			connection.sendMessage(successMessage);
-		}
-		LockManager lockManager = new LockManager
-				(serverConnections, connection, successMessage, failedMessage);
-		lockManagers.put(username, lockManager);
+		if (registeredUsers.containsKey(username)) {
+			connection.sendMessage(failedMessage);
+		} else if (serverConnections.size() == 0) {
+            // the server is a leaf
+            connection.sendMessage(successMessage);
+            registeredUsers.put(username, secret);
+        } else {
+			LockManager lockManager = new LockManager
+					(serverConnections, connection, successMessage, failedMessage);
+			lockManagers.put(username, lockManager);
 
-		forwardMessage(message, connection, serverConnections);
+			forwardMessage(message, connection, serverConnections);
+		}
 		return false;
 	}
 
