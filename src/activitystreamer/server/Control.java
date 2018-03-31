@@ -98,7 +98,7 @@ public class Control extends Thread {
 				case "REGISTER":
 					shouldClose = processRegister(con, msg); break;
 				case "AUTHENTICATE":
-					shouldClose = authenticate(con, msg); break;
+					shouldClose = processAuthenticate(con, msg); break;
 				case "LOCK_REQUEST":
 					shouldClose = processLockRequest(con, msg); break;
 				case "LOCK_ALLOWED":
@@ -113,7 +113,7 @@ public class Control extends Thread {
 					// other commands.
 					shouldClose = true; break;
 			}
-		} catch (IllegalStateException|JsonSyntaxException e) {
+		} catch (NullPointerException|IllegalStateException|JsonSyntaxException e) {
 			log.debug("failed to parse an incoming message in json");
 			InvalidMessageMessage reply;
 			reply = new InvalidMessageMessage("your message is invalid");
@@ -217,6 +217,11 @@ public class Control extends Thread {
 			connection.sendMessage(new InvalidMessageMessage(info));
 			return true;
 		}
+		if (secret == null) {
+			String info = "the message must contain non-null key secret";
+			connection.sendMessage(new InvalidMessageMessage(info));
+			return true;
+		}
 		boolean shouldClose = false;
 
 		String successInfo = "register success for "+username;
@@ -227,17 +232,23 @@ public class Control extends Thread {
 		    connection.sendMessage(failedMessage);
 		    shouldClose = true;
 		} else {
-			LockManager lockManager = new LockManager
-				(serverConnections, connection, successMessage, failedMessage);
-			lockManagers.put(username, lockManager);
+			registeredUsers.put(username, secret);
+			if (serverConnections.isEmpty()) {
+				// happens when there's only one server
+				connection.sendMessage(successMessage);
+			} else {
+				LockManager lockManager = new LockManager
+						(serverConnections, connection, successMessage, failedMessage);
+				lockManagers.put(username, lockManager);
 
-			LockRequestMessage request = new LockRequestMessage(username, secret);
-			forwardMessage(request, connection, serverConnections);
+				LockRequestMessage request = new LockRequestMessage(username, secret);
+				forwardMessage(request, connection, serverConnections);
+			}
 		}
 		return shouldClose;
 	}
 
-	private boolean authenticate(Connection connection, String string) {
+	private boolean processAuthenticate(Connection connection, String string) {
 		if (connection.isAuthenticated()) {
 			connection.sendMessage(new InvalidMessageMessage("already authenticated"));
 			return true;
