@@ -2,6 +2,7 @@ package activitystreamer.server;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,7 +26,7 @@ public class Control extends Thread {
 	private boolean term=false;
 	private Listener listener;
 	private String serverId;
-	private HashMap<String, ServerStatus> redirectServers;
+	private HashMap<String, InetSocketAddress> redirectServers;
 
 	protected static Control control = null;
 	
@@ -125,8 +126,8 @@ public class Control extends Thread {
 		if (numberOfClient - load > 2) {
 			String hostname = message.getHostname();
 			int port = message.getPort();
-			ServerStatus status = new ServerStatus(load, hostname, port);
-			redirectServers.put(id, status);
+			InetSocketAddress address = new InetSocketAddress(hostname, port);
+			redirectServers.put(id, address);
 		} else {
 			redirectServers.remove(id);
 		}
@@ -295,11 +296,17 @@ public class Control extends Thread {
 			replyInfo = "logged in as user " + username;
 			reply = new LoginSuccessMessage(replyInfo);
 			connection.setAuthenticated(true);
-			/*
 
-			CHECK REDIRECT!!!!
+			// check redirect
+            if (!redirectServers.isEmpty()) {
+                InetSocketAddress address = redirectServers.values().iterator().next();
+                String hostname = address.getHostName();
+                int port = address.getPort();
 
-			 */
+                connection.sendMessage(reply); // send the previous login success first
+                reply = new RedirectMessage(hostname, port);
+			}
+
 		} else {
 			if (registeredUsers.containsKey(username))
 			    replyInfo = "wrong secret for user " + username;
@@ -324,6 +331,7 @@ public class Control extends Thread {
 			if (connection != from) connection.sendMessage(message);
 		}
 	}
+
 	/*
 	 * The connection has been closed by the other party.
 	 */
