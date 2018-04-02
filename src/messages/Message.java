@@ -16,10 +16,6 @@ public abstract class Message {
         this.command = command;
     }
 
-    public String getCommand() {
-        return command;
-    }
-
     @Override
     public String toString() {
         return new Gson().toJson(this);

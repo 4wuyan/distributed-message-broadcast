@@ -6,4 +6,8 @@ public class AuthenticateMessage extends Message {
         super("AUTHENTICATE");
         this.secret = secret;
     }
+
+    public String getSecret() {
+        return secret;
+    }
 }

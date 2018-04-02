@@ -11,4 +11,20 @@ public class ServerAnnounceMessage extends Message {
         this.hostname = hostname;
         this.port = port;
     }
+
+    public int getLoad() {
+        return load;
+    }
+
+    public String getHostname() {
+        return hostname;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public String getId() {
+        return id;
+    }
 }

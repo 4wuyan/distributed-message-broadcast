@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger;
 
 import activitystreamer.util.Settings;
 
+import messages.*;
 
 public class Connection extends Thread {
 	private static final Logger log = LogManager.getLogger();
@@ -21,32 +22,29 @@ public class Connection extends Thread {
 	private DataOutputStream out;
 	private BufferedReader inreader;
 	private PrintWriter outwriter;
-	private boolean open = false;
+	private boolean open;
 	private Socket socket;
 	private boolean term=false;
-	
+	private boolean authenticated = false;
+
+
 	Connection(Socket socket) throws IOException{
 		in = new DataInputStream(socket.getInputStream());
-	    out = new DataOutputStream(socket.getOutputStream());
-	    inreader = new BufferedReader( new InputStreamReader(in));
-	    outwriter = new PrintWriter(out, true);
-	    this.socket = socket;
-	    open = true;
-	    start();
+		out = new DataOutputStream(socket.getOutputStream());
+		inreader = new BufferedReader( new InputStreamReader(in));
+		outwriter = new PrintWriter(out, true);
+		this.socket = socket;
+		open = true;
+		start();
 	}
-	
-	/*
-	 * returns true if the message was written, otherwise false
-	 */
-	public boolean writeMsg(String msg) {
+
+	public synchronized void sendMessage(Message message) {
 		if(open){
-			outwriter.println(msg);
+			outwriter.println(message.toString());
 			outwriter.flush();
-			return true;	
 		}
-		return false;
 	}
-	
+
 	public void closeCon(){
 		if(open){
 			log.info("closing connection "+Settings.socketAddress(socket));
@@ -60,12 +58,13 @@ public class Connection extends Thread {
 			}
 		}
 	}
-	
-	
+
+
 	public void run(){
 		try {
 			String data;
 			while(!term && (data = inreader.readLine())!=null){
+				log.info(data);
 				term=Control.getInstance().process(this,data);
 			}
 			log.debug("connection closed to "+Settings.socketAddress(socket));
@@ -77,12 +76,12 @@ public class Connection extends Thread {
 		}
 		open=false;
 	}
-	
-	public Socket getSocket() {
-		return socket;
+
+	public boolean isAuthenticated() {
+		return authenticated;
 	}
-	
-	public boolean isOpen() {
-		return open;
+
+	public void setAuthenticated(boolean authenticated) {
+		this.authenticated = authenticated;
 	}
 }
