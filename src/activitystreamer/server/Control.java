@@ -205,11 +205,11 @@ public class Control extends Thread {
 		LockDeniedMessage deny = new LockDeniedMessage(username, secret);
 		LockAllowedMessage allow = new LockAllowedMessage(username, secret);
 		if (registeredUsers.containsKey(username)) {
-			forwardMessage(deny, null, serverConnections);
+			connection.sendMessage(deny);
 		} else {
 		    registeredUsers.put(username, secret);
+		    connection.sendMessage(allow);
 			forwardMessage(message, connection, serverConnections);
-		    forwardMessage(allow, null, serverConnections);
 		}
 		return false;
 	}
