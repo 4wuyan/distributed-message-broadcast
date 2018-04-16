@@ -2,7 +2,6 @@ package activitystreamer.server;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,7 +25,7 @@ public class Control extends Thread {
 	private boolean term=false;
 	private Listener listener;
 	private String serverId;
-	private HashSet<InetSocketAddress> redirectServerAddresses;
+	private HashMap<String, RedirectMessage> redirects;
 	private HashSet<String> knownServerIDs;
 
 	private static Control control = null;
@@ -43,7 +42,7 @@ public class Control extends Thread {
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
 		serverId = Settings.nextSecret();
-		redirectServerAddresses = new HashSet<>();
+		redirects = new HashMap<>();
 		knownServerIDs = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
@@ -131,16 +130,16 @@ public class Control extends Thread {
 		String id = message.getId();
 		String hostname = message.getHostname();
 		int port = message.getPort();
-		InetSocketAddress address = new InetSocketAddress(hostname, port);
 
 		knownServerIDs.add(id);
 
 		int numberOfClient = connections.size() - serverConnections.size();
 
 		if (numberOfClient - load >= 2) {
-			redirectServerAddresses.add(address);
+		    RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
+			redirects.put(id, redirectMessage);
 		} else {
-			redirectServerAddresses.remove(address);
+			redirects.remove(id);
 		}
 
 		forwardMessage(message, connection, serverConnections);
@@ -329,13 +328,9 @@ public class Control extends Thread {
 			connection.setAuthenticated(true);
 
 			// check redirect
-			if (!redirectServerAddresses.isEmpty()) {
-				InetSocketAddress address = redirectServerAddresses.iterator().next();
-				String hostname = address.getHostName();
-				int port = address.getPort();
-
+			if (!redirects.isEmpty()) {
 				connection.sendMessage(reply); // send the previous login success first
-				reply = new RedirectMessage(hostname, port);
+				reply = redirects.values().iterator().next();
 			}
 
 		} else {
