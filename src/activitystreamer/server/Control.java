@@ -202,20 +202,14 @@ public class Control extends Thread {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 
-		LockDeniedMessage failedMessage = new LockDeniedMessage(username, secret);
-		LockAllowedMessage successMessage = new LockAllowedMessage(username, secret);
+		LockDeniedMessage deny = new LockDeniedMessage(username, secret);
+		LockAllowedMessage allow = new LockAllowedMessage(username, secret);
 		if (registeredUsers.containsKey(username)) {
-			connection.sendMessage(failedMessage);
-		} else if (serverConnections.isEmpty()) {
-			// the server is a leaf
-			connection.sendMessage(successMessage);
-			registeredUsers.put(username, secret);
+			forwardMessage(deny, null, serverConnections);
 		} else {
-			LockManager lockManager = new LockManager
-					(serverConnections, connection, successMessage);
-			lockManagers.put(username, lockManager);
-
+		    registeredUsers.put(username, secret);
 			forwardMessage(message, connection, serverConnections);
+		    forwardMessage(allow, null, serverConnections);
 		}
 		return false;
 	}
