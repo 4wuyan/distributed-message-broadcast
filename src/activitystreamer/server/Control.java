@@ -199,13 +199,11 @@ public class Control extends Thread {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 
-		LockDeniedMessage deny = new LockDeniedMessage(username, secret);
-		LockAllowedMessage allow = new LockAllowedMessage(username, secret);
 		if (registeredUsers.containsKey(username)) {
-			connection.sendMessage(deny);
+			connection.sendMessage(new LockDeniedMessage(username, secret));
 		} else {
 			registeredUsers.put(username, secret);
-			connection.sendMessage(allow);
+			connection.sendMessage(new LockAllowedMessage(username, secret));
 			forwardMessage(message, connection, serverConnections);
 		}
 		return false;
