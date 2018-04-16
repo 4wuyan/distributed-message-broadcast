@@ -166,6 +166,10 @@ public class Control extends Thread {
 				return true;
 			}
 		}
+		if(lockManagers.containsKey(username)) {
+			lockManagers.get(username).sendFailMessage();
+			lockManagers.remove(username);
+		}
 
 		forwardMessage(message, connection, serverConnections);
 		return false;
