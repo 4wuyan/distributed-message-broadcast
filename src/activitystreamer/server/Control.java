@@ -290,7 +290,8 @@ public class Control extends Thread {
 			JSONObject activity = message.getActivity();
 			activity.put("authenticated_user", username);
 			reply = new ActivityBroadcastMessage(activity);
-			forwardMessage(reply, connection, connections);
+			forwardMessage(reply, connection, clientConnections);
+			forwardMessage(reply, null, serverConnections);
 		} else {
 			String info = "username and/or secret is incorrect";
 			reply = new AuthenticationFailMessage(info);
@@ -307,7 +308,8 @@ public class Control extends Thread {
 		}
 		ActivityBroadcastMessage message =
 				new Gson().fromJson(string, ActivityBroadcastMessage.class);
-		forwardMessage(message, connection, connections);
+		forwardMessage(message, connection, serverConnections);
+		forwardMessage(message, null, clientConnections);
 		return false;
 	}
 
