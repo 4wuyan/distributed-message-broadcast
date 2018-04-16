@@ -1,44 +1,36 @@
 package activitystreamer.server;
-
-import messages.Message;
-
-import java.util.HashSet;
+import messages.*;
 
 class LockManager {
-    private HashSet<Connection> waitForApproval;
-    private Connection upstream;
-    private Message successMessage, failedMessage;
+    private int approvalsNeeded;
+    private String secret;
+    private Connection connectionToClient;
+    private Message successMessage, failMessage;
 
-    LockManager(HashSet<Connection> connections, Connection upstream,
-        Message successMessage) {
-        this.upstream = upstream;
-        this.successMessage = successMessage;
-        this.failedMessage = null;
+    LockManager(String secret, Connection client, int approvalsNeeded,
+                Message success, Message fail) {
+        this.secret = secret;
+        this.connectionToClient = client;
+        this.approvalsNeeded = approvalsNeeded;
+        this.successMessage = success;
+        this.failMessage = fail;
+    }
 
-        waitForApproval = new HashSet<>();
-        for(Connection connection : connections) {
-            if(connection != upstream)
-                waitForApproval.add(connection);
+    public void acceptApproval(LockAllowedMessage message) {
+        if(message.getSecret().equals(secret)) {
+            approvalsNeeded--;
         }
     }
 
     public boolean allApproved() {
-        return waitForApproval.isEmpty();
-    }
-
-    public void addApproval(Connection connection) {
-        waitForApproval.remove(connection);
+        return approvalsNeeded == 0;
     }
 
     public void sendFailMessage() {
-        if (failedMessage != null) upstream.sendMessage(failedMessage);
+        connectionToClient.sendMessage(failMessage);
     }
 
     public void sendSuccessMessage() {
-        upstream.sendMessage(successMessage);
-    }
-
-    public void setFailedMessage(Message failedMessage) {
-        this.failedMessage = failedMessage;
+        connectionToClient.sendMessage(successMessage);
     }
 }

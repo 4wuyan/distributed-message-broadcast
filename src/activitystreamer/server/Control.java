@@ -183,13 +183,14 @@ public class Control extends Thread {
 
 		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
 		String username = message.getUsername();
-		String secret = message.getSecret();
-		LockManager lockManager = lockManagers.get(username);
-		lockManager.addApproval(connection);
-		if (lockManager.allApproved()) {
-			lockManager.sendSuccessMessage();
-			registeredUsers.put(username, secret);
+		if (lockManagers.containsKey(username)) {
+			LockManager register = lockManagers.get(username);
+			register.acceptApproval(message);
+			if (register.allApproved()) {
+				register.sendSuccessMessage();
+			}
 		}
+		forwardMessage(message, connection, serverConnections);
 		return false;
 	}
 
@@ -207,8 +208,8 @@ public class Control extends Thread {
 		if (registeredUsers.containsKey(username)) {
 			connection.sendMessage(deny);
 		} else {
-		    registeredUsers.put(username, secret);
-		    connection.sendMessage(allow);
+			registeredUsers.put(username, secret);
+			connection.sendMessage(allow);
 			forwardMessage(message, connection, serverConnections);
 		}
 		return false;
@@ -243,13 +244,12 @@ public class Control extends Thread {
 				// happens when there's only one server
 				connection.sendMessage(successMessage);
 			} else {
-				LockManager lockManager = new LockManager
-						(serverConnections, connection, successMessage);
-				lockManager.setFailedMessage(failedMessage);
+				LockManager lockManager = new LockManager(
+						secret, connection, knownServerIDs.size(), successMessage, failedMessage);
 				lockManagers.put(username, lockManager);
 
 				LockRequestMessage request = new LockRequestMessage(username, secret);
-				forwardMessage(request, connection, serverConnections);
+				forwardMessage(request, null, serverConnections);
 			}
 		}
 		return shouldClose;
