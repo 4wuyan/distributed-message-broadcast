@@ -129,13 +129,13 @@ public class Control extends Thread {
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
 		int load = message.getLoad();
 		String id = message.getId();
-		String hostname = message.getHostname();
-		int port = message.getPort();
 
 		knownServerIDs.add(id);
 
 		if (clientConnections.size() > load) {
 			// When a new client connects later, it will be at least 2 clients less.
+			String hostname = message.getHostname();
+			int port = message.getPort();
 			RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
 			redirects.put(id, redirectMessage);
 		} else {
