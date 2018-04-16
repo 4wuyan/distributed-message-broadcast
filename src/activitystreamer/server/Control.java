@@ -26,7 +26,8 @@ public class Control extends Thread {
 	private boolean term=false;
 	private Listener listener;
 	private String serverId;
-	private HashMap<String, InetSocketAddress> redirectServers;
+	private HashSet<InetSocketAddress> redirectServerAddresses;
+	private HashSet<String> knownServerIDs;
 
 	private static Control control = null;
 
@@ -42,7 +43,8 @@ public class Control extends Thread {
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
 		serverId = Settings.nextSecret();
-		redirectServers = new HashMap<>();
+		redirectServerAddresses = new HashSet<>();
+		knownServerIDs = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
 		lockManagers = new HashMap<>();
@@ -127,15 +129,18 @@ public class Control extends Thread {
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
 		int load = message.getLoad();
 		String id = message.getId();
+		String hostname = message.getHostname();
+		int port = message.getPort();
+		InetSocketAddress address = new InetSocketAddress(hostname, port);
+
+		knownServerIDs.add(id);
+
 		int numberOfClient = connections.size() - serverConnections.size();
 
-		if (numberOfClient - load > 2) {
-			String hostname = message.getHostname();
-			int port = message.getPort();
-			InetSocketAddress address = new InetSocketAddress(hostname, port);
-			redirectServers.put(id, address);
+		if (numberOfClient - load >= 2) {
+			redirectServerAddresses.add(address);
 		} else {
-			redirectServers.remove(id);
+			redirectServerAddresses.remove(address);
 		}
 
 		forwardMessage(message, connection, serverConnections);
@@ -321,8 +326,8 @@ public class Control extends Thread {
 			connection.setAuthenticated(true);
 
 			// check redirect
-			if (!redirectServers.isEmpty()) {
-				InetSocketAddress address = redirectServers.values().iterator().next();
+			if (!redirectServerAddresses.isEmpty()) {
+				InetSocketAddress address = redirectServerAddresses.iterator().next();
 				String hostname = address.getHostName();
 				int port = address.getPort();
 
