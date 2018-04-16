@@ -134,9 +134,7 @@ public class Control extends Thread {
 
 		knownServerIDs.add(id);
 
-		int numberOfClient = clientConnections.size();
-
-		if (numberOfClient > load) {
+		if (clientConnections.size() > load) {
 			// When a new client connects later, it will be at least 2 clients less.
 			RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
 			redirects.put(id, redirectMessage);
