@@ -154,11 +154,11 @@ public class Control extends Thread {
 		}
 
 		LockDeniedMessage message = new Gson().fromJson(string, LockDeniedMessage.class);
-		String username=  message.getUsername();
+		String username= message.getUsername();
 		String secret = message.getSecret();
 
 		if(registeredUsers.containsKey(username)){
-		    if(registeredUsers.get(username).equals(secret)) {
+			if(registeredUsers.get(username).equals(secret)) {
 				registeredUsers.remove(username);
 			}
 			else {
