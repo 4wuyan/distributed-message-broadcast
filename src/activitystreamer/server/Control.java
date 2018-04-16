@@ -69,7 +69,6 @@ public class Control extends Thread {
 			);
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
-			c.setAuthenticated(true);
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
 			System.exit(-1);
@@ -122,7 +121,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processServerAnnounce(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -150,7 +149,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processLockDenied(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -174,7 +173,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processLockAllowed(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -194,7 +193,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processLockRequest(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -218,7 +217,7 @@ public class Control extends Thread {
 		RegisterMessage message = new Gson().fromJson(string, RegisterMessage.class);
 		String username = message.getUsername();
 		String secret = message.getSecret();
-		if (connection.isAuthenticated()) {
+		if (clientConnections.contains(connection)) {
 			String info = "received REGISTER from a client that has already logged in as "+username;
 			connection.sendMessage(new InvalidMessageMessage(info));
 			return true;
@@ -255,7 +254,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processAuthenticate(Connection connection, String string) {
-		if (connection.isAuthenticated()) {
+		if (serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("already authenticated"));
 			return true;
 		}
@@ -264,7 +263,6 @@ public class Control extends Thread {
 		String secret = message.getSecret();
 		boolean shouldClose = false;
 		if(secret.equals(Settings.getSecret())) {
-			connection.setAuthenticated(true);
 			serverConnections.add(connection);
 		}
 		else {
@@ -276,7 +274,7 @@ public class Control extends Thread {
 
 	@SuppressWarnings("unchecked")
 	private boolean processActivityMessage(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!clientConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("must send a LOGIN message first"));
 			return true;
 		}
@@ -303,7 +301,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processActivityBroadcast(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -326,7 +324,6 @@ public class Control extends Thread {
 			replyInfo = "logged in as user " + username;
 			connection.sendMessage(new LoginSuccessMessage(replyInfo));
 			clientConnections.add(connection);
-			connection.setAuthenticated(true);
 
 			// check redirect
 			if (!redirects.isEmpty()) {

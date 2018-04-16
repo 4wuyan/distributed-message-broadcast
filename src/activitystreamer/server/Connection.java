@@ -25,7 +25,6 @@ public class Connection extends Thread {
 	private boolean open;
 	private Socket socket;
 	private boolean term=false;
-	private boolean authenticated = false;
 
 
 	Connection(Socket socket) throws IOException{
@@ -75,13 +74,5 @@ public class Connection extends Thread {
 			Control.getInstance().connectionClosed(this);
 		}
 		open=false;
-	}
-
-	public boolean isAuthenticated() {
-		return authenticated;
-	}
-
-	public void setAuthenticated(boolean authenticated) {
-		this.authenticated = authenticated;
 	}
 }
