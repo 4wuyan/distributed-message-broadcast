@@ -2,7 +2,6 @@ package activitystreamer.server;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,12 +20,14 @@ public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
 	private HashSet<Connection> connections;
 	private HashSet<Connection> serverConnections;
+	private HashSet<Connection> clientConnections;
 	private HashMap<String, String> registeredUsers;
-	private HashMap<String, LockManager> lockManagers;
+	private HashMap<String, PendingRegistration> registrations;
 	private boolean term=false;
 	private Listener listener;
 	private String serverId;
-	private HashMap<String, InetSocketAddress> redirectServers;
+	private HashMap<String, RedirectMessage> redirects;
+	private HashSet<String> knownServerIDs;
 
 	private static Control control = null;
 
@@ -41,11 +42,13 @@ public class Control extends Thread {
 		// initialize the connections array
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
+		clientConnections = new HashSet<>();
 		serverId = Settings.nextSecret();
-		redirectServers = new HashMap<>();
+		redirects = new HashMap<>();
+		knownServerIDs = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
-		lockManagers = new HashMap<>();
+		registrations = new HashMap<>();
 		// start a listener
 		try {
 			listener = new Listener();
@@ -66,7 +69,6 @@ public class Control extends Thread {
 			);
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
-			c.setAuthenticated(true);
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
 			System.exit(-1);
@@ -119,7 +121,7 @@ public class Control extends Thread {
 	}
 
 	private boolean processServerAnnounce(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -127,15 +129,17 @@ public class Control extends Thread {
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
 		int load = message.getLoad();
 		String id = message.getId();
-		int numberOfClient = connections.size() - serverConnections.size();
 
-		if (numberOfClient - load > 2) {
+		knownServerIDs.add(id);
+
+		if (clientConnections.size() > load) {
+			// When a new client connects later, it will be at least 2 clients less.
 			String hostname = message.getHostname();
 			int port = message.getPort();
-			InetSocketAddress address = new InetSocketAddress(hostname, port);
-			redirectServers.put(id, address);
+			RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
+			redirects.put(id, redirectMessage);
 		} else {
-			redirectServers.remove(id);
+			redirects.remove(id);
 		}
 
 		forwardMessage(message, connection, serverConnections);
@@ -143,18 +147,23 @@ public class Control extends Thread {
 	}
 
 	private boolean processLockDenied(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
 
 		LockDeniedMessage message = new Gson().fromJson(string, LockDeniedMessage.class);
-		String username=  message.getUsername();
+		String username= message.getUsername();
+		String secret = message.getSecret();
 
-		if(registeredUsers.containsKey(username)) registeredUsers.remove(username);
-		if(lockManagers.containsKey(username)) {
-			lockManagers.get(username).sendFailMessage();
-			lockManagers.remove(username);
+		if(registeredUsers.containsKey(username)){
+			if(registeredUsers.get(username).equals(secret)) {
+				registeredUsers.remove(username);
+			}
+		}
+		if(registrations.containsKey(username)) {
+			registrations.get(username).sendFailMessage();
+			registrations.remove(username);
 		}
 
 		forwardMessage(message, connection, serverConnections);
@@ -162,25 +171,27 @@ public class Control extends Thread {
 	}
 
 	private boolean processLockAllowed(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
 
 		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
 		String username = message.getUsername();
-		String secret = message.getSecret();
-		LockManager lockManager = lockManagers.get(username);
-		lockManager.addApproval(connection);
-		if (lockManager.allApproved()) {
-			lockManager.sendSuccessMessage();
-			registeredUsers.put(username, secret);
+		if (registrations.containsKey(username)) {
+			PendingRegistration registration = registrations.get(username);
+			registration.acceptApproval(message);
+			if (registration.allApproved()) {
+				registration.sendSuccessMessage();
+				registrations.remove(username);
+			}
 		}
+		forwardMessage(message, connection, serverConnections);
 		return false;
 	}
 
 	private boolean processLockRequest(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
@@ -188,19 +199,11 @@ public class Control extends Thread {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 
-		LockDeniedMessage failedMessage = new LockDeniedMessage(username, secret);
-		LockAllowedMessage successMessage = new LockAllowedMessage(username, secret);
 		if (registeredUsers.containsKey(username)) {
-			connection.sendMessage(failedMessage);
-		} else if (serverConnections.isEmpty()) {
-			// the server is a leaf
-			connection.sendMessage(successMessage);
-			registeredUsers.put(username, secret);
+			connection.sendMessage(new LockDeniedMessage(username, secret));
 		} else {
-			LockManager lockManager = new LockManager
-					(serverConnections, connection, successMessage);
-			lockManagers.put(username, lockManager);
-
+			registeredUsers.put(username, secret);
+			connection.sendMessage(new LockAllowedMessage(username, secret));
 			forwardMessage(message, connection, serverConnections);
 		}
 		return false;
@@ -210,7 +213,7 @@ public class Control extends Thread {
 		RegisterMessage message = new Gson().fromJson(string, RegisterMessage.class);
 		String username = message.getUsername();
 		String secret = message.getSecret();
-		if (connection.isAuthenticated()) {
+		if (clientConnections.contains(connection)) {
 			String info = "received REGISTER from a client that has already logged in as "+username;
 			connection.sendMessage(new InvalidMessageMessage(info));
 			return true;
@@ -235,20 +238,19 @@ public class Control extends Thread {
 				// happens when there's only one server
 				connection.sendMessage(successMessage);
 			} else {
-				LockManager lockManager = new LockManager
-						(serverConnections, connection, successMessage);
-				lockManager.setFailedMessage(failedMessage);
-				lockManagers.put(username, lockManager);
+				PendingRegistration pendingRegistration = new PendingRegistration(
+						secret, connection, knownServerIDs.size(), successMessage, failedMessage);
+				registrations.put(username, pendingRegistration);
 
 				LockRequestMessage request = new LockRequestMessage(username, secret);
-				forwardMessage(request, connection, serverConnections);
+				forwardMessage(request, null, serverConnections);
 			}
 		}
 		return shouldClose;
 	}
 
 	private boolean processAuthenticate(Connection connection, String string) {
-		if (connection.isAuthenticated()) {
+		if (serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("already authenticated"));
 			return true;
 		}
@@ -257,7 +259,6 @@ public class Control extends Thread {
 		String secret = message.getSecret();
 		boolean shouldClose = false;
 		if(secret.equals(Settings.getSecret())) {
-			connection.setAuthenticated(true);
 			serverConnections.add(connection);
 		}
 		else {
@@ -269,7 +270,7 @@ public class Control extends Thread {
 
 	@SuppressWarnings("unchecked")
 	private boolean processActivityMessage(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!clientConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("must send a LOGIN message first"));
 			return true;
 		}
@@ -285,7 +286,8 @@ public class Control extends Thread {
 			JSONObject activity = message.getActivity();
 			activity.put("authenticated_user", username);
 			reply = new ActivityBroadcastMessage(activity);
-			forwardMessage(reply, connection, connections);
+			forwardMessage(reply, connection, clientConnections);
+			forwardMessage(reply, null, serverConnections);
 		} else {
 			String info = "username and/or secret is incorrect";
 			reply = new AuthenticationFailMessage(info);
@@ -296,13 +298,14 @@ public class Control extends Thread {
 	}
 
 	private boolean processActivityBroadcast(Connection connection, String string) {
-		if (!connection.isAuthenticated()) {
+		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
 			return true;
 		}
 		ActivityBroadcastMessage message =
 				new Gson().fromJson(string, ActivityBroadcastMessage.class);
-		forwardMessage(message, connection, connections);
+		forwardMessage(message, connection, serverConnections);
+		forwardMessage(message, null, clientConnections);
 		return false;
 	}
 
@@ -313,32 +316,29 @@ public class Control extends Thread {
 		secret = message.getSecret();
 
 		boolean isSuccessful = checkUsernameSecret(username, secret);
-		Message reply;
+		boolean shouldClose;
 		String replyInfo;
 		if(isSuccessful) {
 			replyInfo = "logged in as user " + username;
-			reply = new LoginSuccessMessage(replyInfo);
-			connection.setAuthenticated(true);
+			connection.sendMessage(new LoginSuccessMessage(replyInfo));
+			clientConnections.add(connection);
 
 			// check redirect
-			if (!redirectServers.isEmpty()) {
-				InetSocketAddress address = redirectServers.values().iterator().next();
-				String hostname = address.getHostName();
-				int port = address.getPort();
-
-				connection.sendMessage(reply); // send the previous login success first
-				reply = new RedirectMessage(hostname, port);
+			if (!redirects.isEmpty()) {
+				connection.sendMessage(redirects.values().iterator().next());
+				shouldClose = true;
+			} else {
+				shouldClose = false;
 			}
-
 		} else {
 			if (registeredUsers.containsKey(username))
 				replyInfo = "wrong secret for user " + username;
 			else
 				replyInfo = "user "+username+" is not registered";
-			reply = new LoginFailedMessage(replyInfo);
+			connection.sendMessage(new LoginFailedMessage(replyInfo));
+			shouldClose = true;
 		}
-		connection.sendMessage(reply);
-		return !isSuccessful;
+		return shouldClose;
 	}
 
 	private boolean checkUsernameSecret(String username, String secret) {
@@ -362,6 +362,7 @@ public class Control extends Thread {
 		if(!term){
 			connections.remove(con);
 			serverConnections.remove(con);
+			clientConnections.remove(con);
 		}
 	}
 
@@ -415,7 +416,7 @@ public class Control extends Thread {
 
 	private boolean doActivity(){
 		ServerAnnounceMessage message;
-		int load = connections.size() - serverConnections.size();
+		int load = clientConnections.size();
 		String hostname = Settings.getLocalHostname();
 		int port = Settings.getLocalPort();
 		message = new ServerAnnounceMessage(serverId, load, hostname, port);
