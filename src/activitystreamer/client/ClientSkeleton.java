@@ -156,7 +156,6 @@ public class ClientSkeleton extends Thread {
 		}
 	}
 
-	// TO BE TESTED!!!!!!!!
 	private void redirect(String string) {
 		RedirectMessage message = new Gson().fromJson(string, RedirectMessage.class);
 		Settings.setRemoteHostname(message.getHostname());

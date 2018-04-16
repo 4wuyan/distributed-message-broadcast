@@ -20,6 +20,7 @@ public class Control extends Thread {
 	private static final Logger log = LogManager.getLogger();
 	private HashSet<Connection> connections;
 	private HashSet<Connection> serverConnections;
+	private HashSet<Connection> clientConnections;
 	private HashMap<String, String> registeredUsers;
 	private HashMap<String, PendingRegistration> registrations;
 	private boolean term=false;
@@ -41,6 +42,7 @@ public class Control extends Thread {
 		// initialize the connections array
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
+		clientConnections = new HashSet<>();
 		serverId = Settings.nextSecret();
 		redirects = new HashMap<>();
 		knownServerIDs = new HashSet<>();
@@ -133,7 +135,7 @@ public class Control extends Thread {
 
 		knownServerIDs.add(id);
 
-		int numberOfClient = connections.size() - serverConnections.size();
+		int numberOfClient = clientConnections.size();
 
 		if (numberOfClient > load) {
 			// When a new client connects later, it will be at least 2 clients less.
@@ -318,28 +320,30 @@ public class Control extends Thread {
 		secret = message.getSecret();
 
 		boolean isSuccessful = checkUsernameSecret(username, secret);
-		Message reply;
+		boolean shouldClose;
 		String replyInfo;
 		if(isSuccessful) {
 			replyInfo = "logged in as user " + username;
-			reply = new LoginSuccessMessage(replyInfo);
+			connection.sendMessage(new LoginSuccessMessage(replyInfo));
+			clientConnections.add(connection);
 			connection.setAuthenticated(true);
 
 			// check redirect
 			if (!redirects.isEmpty()) {
-				connection.sendMessage(reply); // send the previous login success first
-				reply = redirects.values().iterator().next();
+				connection.sendMessage(redirects.values().iterator().next());
+				shouldClose = true;
+			} else {
+				shouldClose = false;
 			}
-
 		} else {
 			if (registeredUsers.containsKey(username))
 				replyInfo = "wrong secret for user " + username;
 			else
 				replyInfo = "user "+username+" is not registered";
-			reply = new LoginFailedMessage(replyInfo);
+			connection.sendMessage(new LoginFailedMessage(replyInfo));
+			shouldClose = true;
 		}
-		connection.sendMessage(reply);
-		return !isSuccessful;
+		return shouldClose;
 	}
 
 	private boolean checkUsernameSecret(String username, String secret) {
@@ -363,6 +367,7 @@ public class Control extends Thread {
 		if(!term){
 			connections.remove(con);
 			serverConnections.remove(con);
+			clientConnections.remove(con);
 		}
 	}
 
@@ -416,7 +421,7 @@ public class Control extends Thread {
 
 	private boolean doActivity(){
 		ServerAnnounceMessage message;
-		int load = connections.size() - serverConnections.size();
+		int load = clientConnections.size();
 		String hostname = Settings.getLocalHostname();
 		int port = Settings.getLocalPort();
 		message = new ServerAnnounceMessage(serverId, load, hostname, port);
