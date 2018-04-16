@@ -22,7 +22,7 @@ public class Control extends Thread {
 	private HashSet<Connection> connections;
 	private HashSet<Connection> serverConnections;
 	private HashMap<String, String> registeredUsers;
-	private HashMap<String, LockManager> lockManagers;
+	private HashMap<String, PendingRegistration> registrations;
 	private boolean term=false;
 	private Listener listener;
 	private String serverId;
@@ -47,7 +47,7 @@ public class Control extends Thread {
 		knownServerIDs = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
-		lockManagers = new HashMap<>();
+		registrations = new HashMap<>();
 		// start a listener
 		try {
 			listener = new Listener();
@@ -166,9 +166,9 @@ public class Control extends Thread {
 				return true;
 			}
 		}
-		if(lockManagers.containsKey(username)) {
-			lockManagers.get(username).sendFailMessage();
-			lockManagers.remove(username);
+		if(registrations.containsKey(username)) {
+			registrations.get(username).sendFailMessage();
+			registrations.remove(username);
 		}
 
 		forwardMessage(message, connection, serverConnections);
@@ -183,11 +183,11 @@ public class Control extends Thread {
 
 		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
 		String username = message.getUsername();
-		if (lockManagers.containsKey(username)) {
-			LockManager register = lockManagers.get(username);
-			register.acceptApproval(message);
-			if (register.allApproved()) {
-				register.sendSuccessMessage();
+		if (registrations.containsKey(username)) {
+			PendingRegistration registration = registrations.get(username);
+			registration.acceptApproval(message);
+			if (registration.allApproved()) {
+				registration.sendSuccessMessage();
 			}
 		}
 		forwardMessage(message, connection, serverConnections);
@@ -244,9 +244,9 @@ public class Control extends Thread {
 				// happens when there's only one server
 				connection.sendMessage(successMessage);
 			} else {
-				LockManager lockManager = new LockManager(
+				PendingRegistration pendingRegistration = new PendingRegistration(
 						secret, connection, knownServerIDs.size(), successMessage, failedMessage);
-				lockManagers.put(username, lockManager);
+				registrations.put(username, pendingRegistration);
 
 				LockRequestMessage request = new LockRequestMessage(username, secret);
 				forwardMessage(request, null, serverConnections);

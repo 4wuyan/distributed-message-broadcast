@@ -1,14 +1,14 @@
 package activitystreamer.server;
 import messages.*;
 
-class LockManager {
+class PendingRegistration {
     private int approvalsNeeded;
     private String secret;
     private Connection connectionToClient;
     private Message successMessage, failMessage;
 
-    LockManager(String secret, Connection client, int approvalsNeeded,
-                Message success, Message fail) {
+    PendingRegistration(String secret, Connection client, int approvalsNeeded,
+                        Message success, Message fail) {
         this.secret = secret;
         this.connectionToClient = client;
         this.approvalsNeeded = approvalsNeeded;
