@@ -155,11 +155,16 @@ public class Control extends Thread {
 
 		LockDeniedMessage message = new Gson().fromJson(string, LockDeniedMessage.class);
 		String username=  message.getUsername();
+		String secret = message.getSecret();
 
-		if(registeredUsers.containsKey(username)) registeredUsers.remove(username);
-		if(lockManagers.containsKey(username)) {
-			lockManagers.get(username).sendFailMessage();
-			lockManagers.remove(username);
+		if(registeredUsers.containsKey(username)){
+		    if(registeredUsers.get(username).equals(secret)) {
+				registeredUsers.remove(username);
+			}
+			else {
+				connection.sendMessage(new InvalidMessageMessage("wrong secret in LOCK_DENIED"));
+				return true;
+			}
 		}
 
 		forwardMessage(message, connection, serverConnections);

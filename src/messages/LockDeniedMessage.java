@@ -12,4 +12,8 @@ public class LockDeniedMessage extends Message {
     public String getUsername() {
         return username;
     }
+
+    public String getSecret() {
+        return secret;
+    }
 }
