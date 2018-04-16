@@ -161,10 +161,6 @@ public class Control extends Thread {
 			if(registeredUsers.get(username).equals(secret)) {
 				registeredUsers.remove(username);
 			}
-			else {
-				connection.sendMessage(new InvalidMessageMessage("wrong secret in LOCK_DENIED"));
-				return true;
-			}
 		}
 		if(registrations.containsKey(username)) {
 			registrations.get(username).sendFailMessage();
@@ -188,6 +184,7 @@ public class Control extends Thread {
 			registration.acceptApproval(message);
 			if (registration.allApproved()) {
 				registration.sendSuccessMessage();
+				registrations.remove(username);
 			}
 		}
 		forwardMessage(message, connection, serverConnections);
