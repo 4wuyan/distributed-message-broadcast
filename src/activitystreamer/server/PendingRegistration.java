@@ -33,4 +33,8 @@ class PendingRegistration {
     public void sendSuccessMessage() {
         connectionToClient.sendMessage(successMessage);
     }
+
+    public Connection getConnectionToClient() {
+        return connectionToClient;
+    }
 }

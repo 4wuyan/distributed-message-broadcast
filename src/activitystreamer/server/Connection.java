@@ -49,8 +49,7 @@ public class Connection extends Thread {
 			log.info("closing connection "+Settings.socketAddress(socket));
 			try {
 				term=true;
-				inreader.close();
-				out.close();
+				socket.close();
 			} catch (IOException e) {
 				// already closed?
 				log.error("received exception closing the connection "+Settings.socketAddress(socket)+": "+e);

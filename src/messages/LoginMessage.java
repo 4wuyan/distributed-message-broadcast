@@ -9,9 +9,9 @@ public class LoginMessage extends Message{
         this.secret = secret;
     }
 
-    public LoginMessage() {
+    public LoginMessage(String username) {
         super("LOGIN");
-        this.username = "anonymous";
+        this.username = username;
         this.secret = null;
     }
 
