@@ -162,7 +162,11 @@ public class Control extends Thread {
 			}
 		}
 		if(registrations.containsKey(username)) {
-			registrations.get(username).sendFailMessage();
+			PendingRegistration registration = registrations.get(username);
+			registration.sendFailMessage();
+			Connection connectionToClient = registration.getConnectionToClient();
+			connectionToClient.closeCon();
+			connectionClosed(connectionToClient);
 			registrations.remove(username);
 		}
 
@@ -355,9 +359,6 @@ public class Control extends Thread {
 		}
 	}
 
-	/*
-	 * The connection has been closed by the other party.
-	 */
 	public synchronized void connectionClosed(Connection con){
 		if(!term){
 			connections.remove(con);
