@@ -50,7 +50,7 @@ public class ClientSkeleton extends Thread {
 		String secret = Settings.getSecret();
 		Message message;
 		if (username.equals("anonymous")) {
-			message = new LoginMessage();
+			message = new LoginMessage(username);
 		} else {
 			if (secret != null) {
 				message = new LoginMessage(username, secret);
