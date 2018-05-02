@@ -18,63 +18,18 @@ Protocols
 
 The protocols are based on Project 1, with the following differences.
 
-Added
--------
-
-### SYNC_USER
-
-Sent from one server to another server.
-
-The receiver will
-
-* update its local storage of registered users,
-  and forward this message to its downstream servers. 
-* Reply with a non-overriding SYNC_USER message containing its own unique user info
-  if `override` is true and the receiver owns some users not included in this message.
-
-Example:
-```json
-{
-    "command": "SYNC_USER",
-    "users": {"user1": "secret1", "user2": "secret2"},
-    "override": true
-}
-```
-
-### ACTIVITY_RETRIEVE
-
-Sent from one server to another
-
-```json
-{
-    "command": "ACTIVITY_RETRIEVE",
-    "after": "foobar",
-    "needReply": true
-}
-```
-
-### NEW_CLIENT
-
-```json
-{
-    "command": "NEW_CLIENT"
-}
-```
-
-### CLIENT_DISCONNECT
-
-```json
-{
-    "command": "CLIENT_DISCONNECT"
-}
-```
-
 Modified
 ---------
 
+### SERVER_ANNOUNCE
+
+The content of SERVER_ANNOUNCE is the same as Project 1,
+but a server will now send its SERVER_ANNOUNCE messages only to its direct neighbours,
+instead of all servers in the network.
+
 ### ACTIVITY_BROADCAST
 
-Same as Project 1, except each activity broadcast message will have a unique id field.
+Same as Project 1, except each activity broadcast message now has a unique id field.
 
 ```json
 {
@@ -86,18 +41,81 @@ Same as Project 1, except each activity broadcast message will have a unique id 
 
 ### AUTHENTICATE
 
-Same as Project 1, except the receiver will reply with an overriding 
-SYNC_USER message if successful.
+Same as Project 1, except the receiver will reply with a SYNC_USER message if successful.
 
-### LOCK_REQUEST
+Added
+-------
 
-Same as Project 1, except the receiver will
+### SYNC_USER
 
-* Reply with a LOCK_DENIED if the username is already known to the server, or
-  any of its downstream neighbours sends it LOCK_DENIED for this username secret pair.
-* Reply with a LOCK_ALLOWED if the username is not known to the server, and
-  all of its downstream neighbours send it LOCK_ALLOWED for this username secret pair.
-* Record this username and secret pair in its local storage if the username is not known.
+Sent from one server to another server.
+
+Example:
+```json
+{
+    "command": "SYNC_USER",
+    "users": {"user1": "secret1", "user2": "secret2"}
+}
+```
+
+The receiver will
+
+* Update its local storage of registered users.
+  Conflicting users will be deleted.
+  Clients logged in with conflicting users will be disconnected.
+* Forward this message to its downstream servers. 
+
+### ACTIVITY_RETRIEVE
+
+Sent from one server to another server.
+
+Example:
+```json
+{
+    "command": "ACTIVITY_RETRIEVE",
+    "after": "foobar"
+}
+```
+
+The receiver will check its cached ACTIVITY_BROADCAST message history, and
+
+* Reply with all the ACTIVITY_BROADCAST messages _after_ the given message id,
+  if the given id is found in the history.
+* Reply with all the ACTIVITY_BROADCAST messages in the cache,
+  if the given id is not found.
+
+### NEW_USER
+
+Sent from one server to all the other servers in the network,
+after a client registers a new user successfully.
+
+Example:
+```json
+{
+    "command": "NEW_USER",
+    "username": "foo",
+    "secret": "bar"
+}
+```
+
+The receiver will
+
+* Keep a record of the username secret pair in its local storage,
+  if the username is not known.
+* Reply with a USER_CONFLICT message if the username is known already
+  with a different secret.
+* Do nothing if the username is known already with the same secret.
+* Forward this message to its downstream servers. 
+
+### USER_CONFLICT
+
+```json
+{
+    "command": "USER_CONFLICT",
+    "username": "foo",
+    "secret": "bar"
+}
+```
 
 _For all protocols above, the receiver will reply with INVALID_MESSAGE
 if the sender is not authenticated or if the message is incorrect anyway._
@@ -105,7 +123,8 @@ if the sender is not authenticated or if the message is incorrect anyway._
 Deleted
 ----------
 
-SERVER_ANNOUNCE is abandoned.
+Lock related protocols (LOCK_REQUEST, LOCK_ALLOWED, and LOCK_DENIED) have been
+abandoned.
 
 User registration
 =================
