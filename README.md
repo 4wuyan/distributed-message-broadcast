@@ -23,9 +23,22 @@ Modified
 
 ### SERVER_ANNOUNCE
 
-The content of SERVER_ANNOUNCE is the same as Project 1,
-but a server will now send its SERVER_ANNOUNCE messages only to its direct neighbours,
-instead of all servers in the network.
+Same as Project 1, but
+
+* No server id field in the message.
+* A server will now send its SERVER_ANNOUNCE messages only to its direct neighbours,
+  instead of all servers in the network.
+* The announcement is not made periodically, but made when a new server connection is
+  established or the client load changes.
+
+```json
+{
+    "command" : "SERVER_ANNOUNCE",
+    "load" : 5,
+    "hostname" : "128.250.13.46",
+    "port" : 3570
+}
+```
 
 ### ACTIVITY_BROADCAST
 
@@ -109,6 +122,7 @@ The receiver will
 
 ### USER_CONFLICT
 
+Example:
 ```json
 {
     "command": "USER_CONFLICT",
@@ -150,3 +164,11 @@ Registered user info synchronisation
 -----------------------------------
 
 _To be continued_
+
+
+Memo
+====
+
+* Don't forget to disconnect clients with conflict servers when receiving USER_CONFLICT or SYNC_USER
+* When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_RETRIEVE, SYNC_USER, SERVER_ANNOUNCE,
+  and the acceptor sends SYNC_USER, ACTIVITY_RETRIEVE, SERVER_ANNOUNCE
