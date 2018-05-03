@@ -54,7 +54,9 @@ Same as Project 1, except each activity broadcast message now has a unique id fi
 
 ### AUTHENTICATE
 
-Same as Project 1, except the receiver will reply with a SYNC_USER message if successful.
+Same as Project 1, except the sender will follow with a SYNC_USER afterwards,
+and the receiver will reply with a SYNC_USER if successful.
+(SYNC_USER can be omitted if there's no user yet.)
 
 Added
 -------
@@ -172,8 +174,19 @@ However, SERVER_ANNOUNCE is now shared locally rather than globally.
 Hence one redirection can only take a client to a server's neighbour,
 and it could take several steps for a client to get accepted finally.
 
+CAP solution
+====================
+
+Availability is instantly guaranteed when one or more servers crash or
+network partition happens,
+as the system does not rely on correct global information (such as the global
+SERVER_ANNOUNCE or LOCK_REQUEST in Project 1).
+The information of neighbours is sufficient for the system to operate.
+Activity broadcast, registration, and redirection still function in each sub-network as expected.
+
+
 Partition recovery
-==================
+--------------------
 
 When a connection between two servers is broken,
 the child node (if you view the initial server as the root of the tree)
@@ -186,9 +199,6 @@ reconnecting to its parent node periodically until a preset timeout (e.g. 2 hour
 If the connection is fixed, there are two things the two parties need to exchange and
 synchronise: activity messages and registered users.
 
-Activity message synchronisation
----------------------------------
-
 Once the connection breaks, the child server will make a note of the message ID of the last
 ACTIVITY_BROADCAST. Once the connection is fixed, after a routine AUTHENTICATE,
 the initiator, i.e. the child node, will:
@@ -197,14 +207,12 @@ the initiator, i.e. the child node, will:
 * Send an ACTIVITY_RETRIEVE to retrieve all the ACTIVITY_BROADCAST messages after the recorded
   ID from the other side.
 * Send SYNC_USER to the other side.
+  (SYNC_USER from the other side is the reply of AUTHENTICATE.)
 
-The parent node does not care whether it's a new connection or fixed connection.
-It simply responds to each message in the normal way.
+The parent node does not care whether it's a new connection or a fixed connection.
+It simply responds to each message as usual.
 
-Registered user info synchronisation
------------------------------------
-
-_To be continued_
+Consistency is now achieved eventually.
 
 Defending the design
 ====================
@@ -221,6 +229,6 @@ Memo
 ====
 
 * Don't forget to disconnect clients with conflict servers when receiving USER_CONFLICT or SYNC_USER
-* When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_BROADCASTs,
+* When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_BROADCAST,
   ACTIVITY_RETRIEVE, SYNC_USER, SERVER_ANNOUNCE,
   and the acceptor sends SYNC_USER, SERVER_ANNOUNCE
