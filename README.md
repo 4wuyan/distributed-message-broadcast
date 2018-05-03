@@ -118,13 +118,13 @@ The receiver will
 * Keep a record of the username secret pair in its local storage if the username is not known,
   or do nothing if the username is known already with the same secret.
   Then forward this message to its downstream servers. 
-* Reply with a USER_CONFLICT message if the username is known already
+* Broadcast a USER_CONFLICT message if the username is known already
   with a different secret. Then delete the corresponding user info.
 
 ### USER_CONFLICT
 
-Sent from Server A to Server B when B sends A a NEW_USER message with a
-username known to A already with a different secret.
+Broadcast by a server when it receives a NEW_USER message which contains a username
+known in its local storage already with a different secret.
 
 Example:
 ```json
@@ -155,14 +155,14 @@ Since the registered user lists in different servers are consistent most of the 
 there is no need to use the complicated lock request mechanism.
 When a client wants to register a new user, the server will only check its local storage.
 If successful, the server will keep a record of the username secret pair,
-and broadcast a NEW_USER message to keep the other servers updated.
+and broadcast a NEW_USER message to keep the other servers up-to-date.
 
-A USER_CONFLICT message will be initiated if a server receivers a NEW_USER message
+A USER_CONFLICT message will be broadcast if a server receivers a NEW_USER message
 with a username already known with a different secret.
 If two or more clients in the network try to register the same username
-with different secrets at the same time, every server in the network will receive
-at least one USER_CONFLICT message finally. The conflicting user will be removed and
-those clients that have already logged in with that username will be disconnected.
+with different secrets at the same time, the conflicting user will be removed and
+those clients that have already logged in with that username will be disconnected,
+thanks to the USER_CONFLICT protocol.
 Hence the local storage of the servers remains consistent.
 
 Load balancing
@@ -181,7 +181,7 @@ Availability is instantly guaranteed when one or more servers crash or
 network partition happens,
 as the system does not rely on correct global information (such as the global
 SERVER_ANNOUNCE or LOCK_REQUEST in Project 1).
-The information of neighbours is sufficient for the system to operate.
+The information of local neighbours is sufficient for the system to operate.
 Activity broadcast, registration, and redirection still function in each sub-network as expected.
 
 
@@ -217,13 +217,72 @@ Consistency is now achieved eventually.
 Defending the design
 ====================
 
-blah blah
+Registration
+-----------
+
+In Project 1 LOCK_DENIED almost never occurs.
+As it's assumed servers never quit or crash, the local storage of different servers
+is always consistent. Hence there's no need to broadcast a LOCK_REQUEST to ask for
+others' approvals, and checking one's own local storage is adequate for registering
+a user. This is exactly what we do in Project 2. NEW_USER protocol is utilised to
+update the local storage of other servers.
+
+In Project 1, LOCK_DENIED could only arise when two clients try to register the same
+username. But using USER_CONFLICT is enough to handle this situation, and it is
+unnecessary to introduce a whole O(n^2) request / allow / deny mechanism.
+
+Announcement
+------------
+
+Making announcement in a fixed time interval is not a good idea. It's going to be
+too infrequent under high load, while too frequent if idle.
+So a better approach is to make dynamic announcement upon new connection establishment or
+server load variation.
+
+Previously the announcement was broadcast in the entire network. It has some disadvantages:
+
+* Poor scalability. The server group will be jammed with all SERVER_ANNOUNCE by itself
+  when the network becomes large due to the O(n^2) complexity.
+* Not up-to-date. A server can only know if its neighbour is on in real time.
+  If one server who has made an announcement earlier dies or network partition
+  happens, not all of the servers will notice that. As a result, a client might get redirected
+  to an unreachable server.
+
+Redirection
+----------
+
+Though redirection might take more than one step now, it's still acceptable because:
+
+* It's a safer and more reliable mechanism. A client will not be redirected to an
+  unavailable server when network partition happens. A client will not be redirected
+  to a server in another sub-network either
+  if some server is down and the original network is separated.
+* The extreme condition is rare.
+* Otherwise we would need to share SERVER_ANNOUNCE globally,
+  which would produce even more messages.
 
 Concurrency
------------
+=============
+
+Network capacity is still a bottleneck for concurrency. No surprise.
+
+Under high concurrency conditions, two extreme cases could happen, and they
+are successfully handled in our protocol.
+
+(a)
+If two clients try to register the same username with different secrets at the same time,
+neither will succeed due to the USER_CONFLICT protocol.
+
+(b)
+If a broken connection is fixed and the two sides are synchronising registered users,
+but meanwhile another server on one side is registering a user that already exists on
+the other side, the USER_CONFLICT mechanism will also take effect and the user is removed
+from the entire system. 
 
 Scalability
------------
+=============
+
+The system is very scalable as the operations are all in O(n) time now.
 
 Memo
 ====
