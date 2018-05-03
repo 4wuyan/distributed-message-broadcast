@@ -175,12 +175,31 @@ and it could take several steps for a client to get accepted finally.
 Partition recovery
 ==================
 
+When a connection between two servers is broken,
+the child node (if you view the initial server as the root of the tree)
+is responsible for reestablishing the connection.
 
+For a broken connection, it's difficult to tell whether it's a network partition or
+the parent node is down. As the partition is transient, the child node will try
+reconnecting to its parent node periodically until a preset timeout (e.g. 2 hours).
+
+If the connection is fixed, there are two things the two parties need to exchange and
+synchronise: activity messages and registered users.
 
 Activity message synchronisation
 ---------------------------------
 
-_To be continued_
+Once the connection breaks, the child server will make a note of the message ID of the last
+ACTIVITY_BROADCAST. Once the connection is fixed, after a routine AUTHENTICATE,
+the initiator, i.e. the child node, will:
+
+* Send all ACTIVITY_BROADCAST messages after the recorded ID in the cache to the other side.
+* Send an ACTIVITY_RETRIEVE to retrieve all the ACTIVITY_BROADCAST messages after the recorded
+  ID from the other side.
+* Send SYNC_USER to the other side.
+
+The parent node does not care whether it's a new connection or fixed connection.
+It simply responds to each message in the normal way.
 
 Registered user info synchronisation
 -----------------------------------
@@ -202,5 +221,6 @@ Memo
 ====
 
 * Don't forget to disconnect clients with conflict servers when receiving USER_CONFLICT or SYNC_USER
-* When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_RETRIEVE, SYNC_USER, SERVER_ANNOUNCE,
-  and the acceptor sends SYNC_USER, ACTIVITY_RETRIEVE, SERVER_ANNOUNCE
+* When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_BROADCASTs,
+  ACTIVITY_RETRIEVE, SYNC_USER, SERVER_ANNOUNCE,
+  and the acceptor sends SYNC_USER, SERVER_ANNOUNCE
