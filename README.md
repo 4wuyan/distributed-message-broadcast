@@ -113,23 +113,29 @@ Example:
 
 The receiver will
 
-* Keep a record of the username secret pair in its local storage,
-  if the username is not known.
+* Keep a record of the username secret pair in its local storage if the username is not known,
+  or do nothing if the username is known already with the same secret.
+  Then forward this message to its downstream servers. 
 * Reply with a USER_CONFLICT message if the username is known already
-  with a different secret.
-* Do nothing if the username is known already with the same secret.
-* Forward this message to its downstream servers. 
+  with a different secret. Then delete the corresponding user info.
 
 ### USER_CONFLICT
+
+Sent from Server A to Server B when B sends A a NEW_USER message with a
+username known to A already with a different secret.
 
 Example:
 ```json
 {
     "command": "USER_CONFLICT",
-    "username": "foo",
-    "secret": "bar"
+    "username": "foo"
 }
 ```
+
+The receiver will:
+
+* Delete the corresponding user if the username exists in its local storage.
+* Forward this message to its downstream servers.
 
 _For all protocols above, the receiver will reply with INVALID_MESSAGE
 if the sender is not authenticated or if the message is incorrect anyway._
@@ -143,17 +149,33 @@ abandoned.
 User registration
 =================
 
-_To be continued_
+Since the registered user lists in different servers are consistent most of the time,
+there is no need to use the complicated lock request mechanism.
+When a client wants to register a new user, the server will only check its local storage.
+If successful, the server will keep a record of the username secret pair,
+and broadcast a NEW_USER message to keep the other servers updated.
+
+A USER_CONFLICT message will be initiated if a server receivers a NEW_USER message
+with a username already known with a different secret.
+If two or more clients in the network try to register the same username
+with different secrets at the same time, every server in the network will receive
+at least one USER_CONFLICT message finally. The conflicting user will be removed and
+those clients that have already logged in with that username will be disconnected.
+Hence the local storage of the servers remains consistent.
 
 Load balancing
 ================
 
-_To be continued_
+The redirection mechanism is the same as Project 1.
+
+However, SERVER_ANNOUNCE is now shared locally rather than globally.
+Hence one redirection can only take a client to a server's neighbour,
+and it could take several steps for a client to get accepted finally.
 
 Partition recovery
 ==================
 
-_To be continued_
+
 
 Activity message synchronisation
 ---------------------------------
@@ -165,6 +187,16 @@ Registered user info synchronisation
 
 _To be continued_
 
+Defending the design
+====================
+
+blah blah
+
+Concurrency
+-----------
+
+Scalability
+-----------
 
 Memo
 ====
