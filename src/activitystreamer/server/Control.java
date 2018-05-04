@@ -82,7 +82,7 @@ public class Control {
 	 * Processing incoming messages from the connection.
 	 * Return true if the connection should close.
 	 */
-	public synchronized boolean process(Connection con,String msg){
+	public synchronized boolean process(Connection con, String msg){
 		String command;
 		boolean shouldClose;
 		try {
@@ -113,6 +113,11 @@ public class Control {
 					shouldClose = true; break;
 			}
 		} catch (NullPointerException|IllegalStateException|JsonSyntaxException e) {
+		    /* Exception examples:
+		    {} -> NullPinterException
+		    xx -> IllegalStateException
+		    {x -> JsonSyntaxException
+		     */
 			log.debug("failed to parse an incoming message in json");
 			InvalidMessageMessage reply;
 			reply = new InvalidMessageMessage("your message is invalid");

@@ -22,12 +22,14 @@ class OnlineUserManager {
     }
 
     public void logout(String username) {
-        HashSet<Connection> connections = usernameToConnections.get(username);
-        usernameToConnections.remove(username);
+        if (usernameToConnections.containsKey(username)) {
+            HashSet<Connection> connections = usernameToConnections.get(username);
+            usernameToConnections.remove(username);
 
-        for (Connection connection : connections) {
-            connectionToUsername.remove(connection);
-            connection.closeCon();
+            for (Connection connection : connections) {
+                connectionToUsername.remove(connection);
+                connection.closeCon();
+            }
         }
     }
 
