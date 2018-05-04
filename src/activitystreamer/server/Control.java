@@ -3,9 +3,7 @@ package activitystreamer.server;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -110,16 +108,22 @@ public class Control {
 					shouldClose = processNewUser(con, msg); break;
 				case "USER_CONFLICT":
 					shouldClose = processUserConflict(con, msg); break;
+ 	 	 	 	/*
+				case "ACTIVITY_RETRIEVE":
+					break;
+				case "BUNDLE":
+					break;
+ 	 	 	 	*/
 				default:
 					// other commands.
 					shouldClose = true; break;
 			}
 		} catch (NullPointerException|IllegalStateException|JsonSyntaxException e) {
-		    /* Exception examples:
-		    {} -> NullPinterException
-		    xx -> IllegalStateException
-		    {x -> JsonSyntaxException
-		     */
+		 	/* Exception examples:
+		 	{} -> NullPinterException
+		 	xx -> IllegalStateException
+		 	{x -> JsonSyntaxException
+		 	 */
 			log.debug("failed to parse an incoming message in json");
 			InvalidMessageMessage reply;
 			reply = new InvalidMessageMessage("your message is invalid");
@@ -411,4 +415,18 @@ public class Control {
 		int port = Settings.getLocalPort();
 		return new ServerAnnounceMessage(load, hostname, port);
 	}
+
+	private LinkedList<ActivityBroadcastMessage> getActivityBroadcastAfter(String id) {
+	 	LinkedList<ActivityBroadcastMessage> answer = new LinkedList<>();
+		Iterator<ActivityBroadcastMessage> iterator = activityHistory.descendingIterator();
+		while (iterator.hasNext()) {
+			ActivityBroadcastMessage message = iterator.next();
+			if (message.getId().equals(id)) {
+				break;
+			} else {
+				answer.addFirst(message);
+			}
+		}
+		return answer;
+ 	}
 }
