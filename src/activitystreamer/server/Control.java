@@ -30,10 +30,6 @@ public class Control {
 
 	private HashMap<String, String> registeredUsers;
 
-	// To delete
-	private HashMap<String, PendingRegistration> registrations;
-	private HashSet<String> knownServerIDs;
-
 	private static Control control = null;
 
 	public static Control getInstance() {
@@ -53,10 +49,6 @@ public class Control {
 		onlineUserManager = new OnlineUserManager();
 
 		registeredUsers = new HashMap<>();
-
-		// to delete
-		knownServerIDs = new HashSet<>();
-		registrations = new HashMap<>();
 
 		// start a listener
 		try {
@@ -90,7 +82,7 @@ public class Control {
 	 * Processing incoming messages from the connection.
 	 * Return true if the connection should close.
 	 */
-	public synchronized boolean process(Connection con,String msg){
+	public synchronized boolean process(Connection con, String msg){
 		String command;
 		boolean shouldClose;
 		try {
@@ -106,23 +98,26 @@ public class Control {
 					shouldClose = processRegister(con, msg); break;
 				case "AUTHENTICATE":
 					shouldClose = processAuthenticate(con, msg); break;
-				case "LOCK_REQUEST":
-					shouldClose = processLockRequest(con, msg); break;
-				case "LOCK_ALLOWED":
-					shouldClose = processLockAllowed(con, msg); break;
-				case "LOCK_DENIED":
-					shouldClose = processLockDenied(con, msg); break;
 				case "LOGOUT":
 					shouldClose = true; break;
 				case "SERVER_ANNOUNCE":
 					shouldClose = processServerAnnounce(con, msg); break;
 				case "SYNC_USER":
 					shouldClose = processSyncUser(con, msg); break;
+				case "NEW_USER":
+					shouldClose = processNewUser(con, msg); break;
+				case "USER_CONFLICT":
+					shouldClose = processUserConflict(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
 			}
 		} catch (NullPointerException|IllegalStateException|JsonSyntaxException e) {
+		    /* Exception examples:
+		    {} -> NullPinterException
+		    xx -> IllegalStateException
+		    {x -> JsonSyntaxException
+		     */
 			log.debug("failed to parse an incoming message in json");
 			InvalidMessageMessage reply;
 			reply = new InvalidMessageMessage("your message is invalid");
@@ -130,6 +125,49 @@ public class Control {
 			shouldClose = true;
 		}
 		return shouldClose;
+	}
+
+	private boolean processUserConflict(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		UserConflictMessage message = new Gson().fromJson(string, UserConflictMessage.class);
+		String username = message.getUsername();
+		if (registeredUsers.containsKey(username)) {
+			registeredUsers.remove(username);
+			onlineUserManager.logout(username);
+		}
+		forwardMessage(message, connection, serverConnections);
+
+		return false;
+	}
+
+	private boolean processNewUser(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		NewUserMessage message = new Gson().fromJson(string, NewUserMessage.class);
+		String username = message.getUsername();
+		String secret = message.getSecret();
+
+		if (registeredUsers.containsKey(username)) {
+			if (! registeredUsers.get(username).equals(secret)) {
+				registeredUsers.remove(username);
+				onlineUserManager.logout(username);
+				forwardMessage(new UserConflictMessage(username), null, serverConnections);
+			} else {
+				forwardMessage(message, connection, serverConnections);
+			}
+		} else {
+			registeredUsers.put(username, secret);
+			forwardMessage(message, connection, serverConnections);
+		}
+
+		return false;
 	}
 
 	private boolean processSyncUser(Connection connection, String string) {
@@ -167,75 +205,6 @@ public class Control {
 
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
 		neighbourInfo.put(connection, message);
-
-		forwardMessage(message, connection, serverConnections);
-		return false;
-	}
-
-	private boolean processLockDenied(Connection connection, String string) {
-		if (!serverConnections.contains(connection)) {
-			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
-			return true;
-		}
-
-		LockDeniedMessage message = new Gson().fromJson(string, LockDeniedMessage.class);
-		String username= message.getUsername();
-		String secret = message.getSecret();
-
-		if(registeredUsers.containsKey(username)){
-			if(registeredUsers.get(username).equals(secret)) {
-				registeredUsers.remove(username);
-			}
-		}
-		if(registrations.containsKey(username)) {
-			PendingRegistration registration = registrations.get(username);
-			registration.sendFailMessage();
-			Connection connectionToClient = registration.getConnectionToClient();
-			connectionToClient.closeCon();
-			connectionClosed(connectionToClient);
-			registrations.remove(username);
-		}
-
-		forwardMessage(message, connection, serverConnections);
-		return false;
-	}
-
-	private boolean processLockAllowed(Connection connection, String string) {
-		if (!serverConnections.contains(connection)) {
-			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
-			return true;
-		}
-
-		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
-		String username = message.getUsername();
-		if (registrations.containsKey(username)) {
-			PendingRegistration registration = registrations.get(username);
-			registration.acceptApproval(message);
-			if (registration.allApproved()) {
-				registration.sendSuccessMessage();
-				registrations.remove(username);
-			}
-		}
-		forwardMessage(message, connection, serverConnections);
-		return false;
-	}
-
-	private boolean processLockRequest(Connection connection, String string) {
-		if (!serverConnections.contains(connection)) {
-			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
-			return true;
-		}
-		LockRequestMessage message = new Gson().fromJson(string, LockRequestMessage.class);
-		String username = message.getUsername();
-		String secret = message.getSecret();
-
-		if (registeredUsers.containsKey(username)) {
-			connection.sendMessage(new LockDeniedMessage(username, secret));
-		} else {
-			registeredUsers.put(username, secret);
-			connection.sendMessage(new LockAllowedMessage(username, secret));
-			forwardMessage(message, connection, serverConnections);
-		}
 		return false;
 	}
 
@@ -253,28 +222,21 @@ public class Control {
 			connection.sendMessage(new InvalidMessageMessage(info));
 			return true;
 		}
-		boolean shouldClose = false;
 
-		String successInfo = "register success for "+username;
-		String failedInfo = username+" is already registered with the system";
-		RegisterSuccessMessage successMessage = new RegisterSuccessMessage(successInfo);
-		RegisterFailedMessage failedMessage = new RegisterFailedMessage(failedInfo);
+		boolean shouldClose;
 		if(registeredUsers.containsKey(username)) {
-			connection.sendMessage(failedMessage);
+			String info = username+" is already registered with the system";
+			RegisterFailedMessage fail = new RegisterFailedMessage(info);
+			connection.sendMessage(fail);
 			shouldClose = true;
 		} else {
 			registeredUsers.put(username, secret);
-			if (serverConnections.isEmpty()) {
-				// happens when there's only one server
-				connection.sendMessage(successMessage);
-			} else {
-				PendingRegistration pendingRegistration = new PendingRegistration(
-						secret, connection, knownServerIDs.size(), successMessage, failedMessage);
-				registrations.put(username, pendingRegistration);
+			String info = "register success for "+username;
+			RegisterSuccessMessage success = new RegisterSuccessMessage(info);
+			connection.sendMessage(success);
+			shouldClose = false;
 
-				LockRequestMessage request = new LockRequestMessage(username, secret);
-				forwardMessage(request, null, serverConnections);
-			}
+			forwardMessage(new NewUserMessage(username, secret), null, serverConnections);
 		}
 		return shouldClose;
 	}
@@ -379,12 +341,12 @@ public class Control {
 	}
 
 	private RedirectMessage getRedirect() {
-	    for (ServerAnnounceMessage announcement: neighbourInfo.values()) {
-	    	int load = announcement.getLoad();
-	    	if (clientConnections.size() > load) {
-	    		String hostname = announcement.getHostname();
-	    		int port = announcement.getPort();
-	    		return new RedirectMessage(hostname, port);
+	 	for (ServerAnnounceMessage announcement: neighbourInfo.values()) {
+	 		int load = announcement.getLoad();
+	 		if (clientConnections.size() > load) {
+	 			String hostname = announcement.getHostname();
+	 			int port = announcement.getPort();
+	 			return new RedirectMessage(hostname, port);
 			}
 		}
 		return null;
