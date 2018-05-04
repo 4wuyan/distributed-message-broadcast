@@ -19,12 +19,19 @@ import org.json.simple.JSONObject;
 
 public class Control {
 	private static final Logger log = LogManager.getLogger();
+
+	// for servers
 	private HashSet<Connection> serverConnections;
+	private HashMap<Connection, ServerAnnounceMessage> neighbourInfo;
+
+	// for clients
 	private HashSet<Connection> clientConnections;
-	private HashMap<String, String> registeredUsers;
 	private OnlineUserManager onlineUserManager;
+
+	private HashMap<String, String> registeredUsers;
+
+	// To delete
 	private HashMap<String, PendingRegistration> registrations;
-	private HashMap<Connection, RedirectMessage> redirects;
 	private HashSet<String> knownServerIDs;
 
 	private static Control control = null;
@@ -37,14 +44,20 @@ public class Control {
 	}
 
 	private Control() {
+		// for servers
 		serverConnections = new HashSet<>();
+		neighbourInfo = new HashMap<>();
+
+		// for clients
 		clientConnections = new HashSet<>();
 		onlineUserManager = new OnlineUserManager();
-		redirects = new HashMap<>();
-		knownServerIDs = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
+
+		// to delete
+		knownServerIDs = new HashSet<>();
 		registrations = new HashMap<>();
+
 		// start a listener
 		try {
 			new Listener();
@@ -153,17 +166,7 @@ public class Control {
 		}
 
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
-		int load = message.getLoad();
-
-		if (clientConnections.size() > load) {
-			// When a new client connects later, it will be at least 2 clients less.
-			String hostname = message.getHostname();
-			int port = message.getPort();
-			RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
-			redirects.put(connection, redirectMessage);
-		} else {
-			redirects.remove(connection);
-		}
+		neighbourInfo.put(connection, message);
 
 		forwardMessage(message, connection, serverConnections);
 		return false;
@@ -354,8 +357,9 @@ public class Control {
 			connection.sendMessage(new LoginSuccessMessage(replyInfo));
 
 			// check redirect
-			if (!redirects.isEmpty()) {
-				connection.sendMessage(redirects.values().iterator().next());
+			RedirectMessage redirect = getRedirect();
+			if (redirect != null) {
+				connection.sendMessage(redirect);
 				shouldClose = true;
 			} else {
 				clientConnections.add(connection);
@@ -372,6 +376,18 @@ public class Control {
 			shouldClose = true;
 		}
 		return shouldClose;
+	}
+
+	private RedirectMessage getRedirect() {
+	    for (ServerAnnounceMessage announcement: neighbourInfo.values()) {
+	    	int load = announcement.getLoad();
+	    	if (clientConnections.size() > load) {
+	    		String hostname = announcement.getHostname();
+	    		int port = announcement.getPort();
+	    		return new RedirectMessage(hostname, port);
+			}
+		}
+		return null;
 	}
 
 	private boolean checkUsernameSecret(String username, String secret) {
@@ -398,7 +414,7 @@ public class Control {
 
 		// For servers
 		serverConnections.remove(con);
-		redirects.remove(con);
+		neighbourInfo.remove(con);
 	}
 
 	public synchronized void incomingConnection(Socket s) throws IOException{

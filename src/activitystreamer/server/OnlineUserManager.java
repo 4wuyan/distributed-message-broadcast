@@ -32,13 +32,15 @@ class OnlineUserManager {
     }
 
     public void remove(Connection connection) {
-        String username = connectionToUsername.get(connection);
-        connectionToUsername.remove(connection);
+        if (connectionToUsername.containsKey(connection)) {
+            String username = connectionToUsername.get(connection);
+            connectionToUsername.remove(connection);
 
-        HashSet<Connection> connections = usernameToConnections.get(username);
-        connections.remove(connection);
-        if(connections.isEmpty()) {
-            usernameToConnections.remove(username);
+            HashSet<Connection> connections = usernameToConnections.get(username);
+            connections.remove(connection);
+            if (connections.isEmpty()) {
+                usernameToConnections.remove(username);
+            }
         }
     }
 }
