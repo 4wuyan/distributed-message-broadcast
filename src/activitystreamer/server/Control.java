@@ -281,7 +281,8 @@ public class Control {
 		if(isValid) {
 			JSONObject activity = message.getActivity();
 			activity.put("authenticated_user", username);
-			reply = new ActivityBroadcastMessage(activity);
+			String id = Settings.nextSecret();
+			reply = new ActivityBroadcastMessage(activity, id);
 			forwardMessage(reply, connection, clientConnections);
 			forwardMessage(reply, null, serverConnections);
 		} else {
