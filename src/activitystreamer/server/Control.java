@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -22,6 +23,7 @@ public class Control extends Thread {
 	private HashSet<Connection> serverConnections;
 	private HashSet<Connection> clientConnections;
 	private HashMap<String, String> registeredUsers;
+	private OnlineUserManager onlineUserManager;
 	private HashMap<String, PendingRegistration> registrations;
 	private boolean term=false;
 	private Listener listener;
@@ -43,6 +45,7 @@ public class Control extends Thread {
 		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
 		clientConnections = new HashSet<>();
+		onlineUserManager = new OnlineUserManager();
 		serverId = Settings.nextSecret();
 		redirects = new HashMap<>();
 		knownServerIDs = new HashSet<>();
@@ -106,6 +109,8 @@ public class Control extends Thread {
 					shouldClose = true; break;
 				case "SERVER_ANNOUNCE":
 					shouldClose = processServerAnnounce(con, msg); break;
+				case "SYNC_USER":
+					shouldClose = processSyncUser(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
@@ -118,6 +123,33 @@ public class Control extends Thread {
 			shouldClose = true;
 		}
 		return shouldClose;
+	}
+
+	private boolean processSyncUser(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		SyncUserMessage message = new Gson().fromJson(string, SyncUserMessage.class);
+		HashMap<String, String> users = message.getUsers();
+
+		for (Map.Entry<String, String> e : users.entrySet()) {
+			String username = e.getKey();
+			String secret = e.getValue();
+			if (registeredUsers.containsKey(username)) {
+			    if (!registeredUsers.get(username).equals(secret)) {
+					registeredUsers.remove(username);
+					onlineUserManager.logout(username);
+				}
+			}
+			else {
+				registeredUsers.put(username, secret);
+			}
+		}
+
+		forwardMessage(message, connection, serverConnections);
+		return false;
 	}
 
 	private boolean processServerAnnounce(Connection connection, String string) {
@@ -264,6 +296,9 @@ public class Control extends Thread {
 		boolean shouldClose = false;
 		if(secret.equals(Settings.getSecret())) {
 			serverConnections.add(connection);
+			if (! registeredUsers.isEmpty()) {
+				connection.sendMessage(new SyncUserMessage(registeredUsers));
+			}
 		}
 		else {
 			connection.sendMessage(new AuthenticationFailMessage("secret incorrect"));
@@ -325,13 +360,14 @@ public class Control extends Thread {
 		if(isSuccessful) {
 			replyInfo = "logged in as user " + username;
 			connection.sendMessage(new LoginSuccessMessage(replyInfo));
-			clientConnections.add(connection);
 
 			// check redirect
 			if (!redirects.isEmpty()) {
 				connection.sendMessage(redirects.values().iterator().next());
 				shouldClose = true;
 			} else {
+				clientConnections.add(connection);
+				onlineUserManager.login(username, connection);
 				shouldClose = false;
 			}
 		} else {
@@ -364,6 +400,7 @@ public class Control extends Thread {
 			connections.remove(con);
 			serverConnections.remove(con);
 			clientConnections.remove(con);
+			onlineUserManager.remove(con);
 		}
 	}
 
