@@ -5,7 +5,7 @@ import java.util.HashMap;
 public class SyncUserMessage extends Message {
     private HashMap<String, String> users;
 
-    public SyncUserMessage(HashMap<String,String> users, boolean override) {
+    public SyncUserMessage(HashMap<String,String> users) {
         super("SYNC_USER");
         this.users = new HashMap<>(users);
     }
