@@ -30,10 +30,6 @@ public class Control {
 
 	private HashMap<String, String> registeredUsers;
 
-	// To delete
-	private HashMap<String, PendingRegistration> registrations;
-	private HashSet<String> knownServerIDs;
-
 	private static Control control = null;
 
 	public static Control getInstance() {
@@ -53,10 +49,6 @@ public class Control {
 		onlineUserManager = new OnlineUserManager();
 
 		registeredUsers = new HashMap<>();
-
-		// to delete
-		knownServerIDs = new HashSet<>();
-		registrations = new HashMap<>();
 
 		// start a listener
 		try {
@@ -106,12 +98,6 @@ public class Control {
 					shouldClose = processRegister(con, msg); break;
 				case "AUTHENTICATE":
 					shouldClose = processAuthenticate(con, msg); break;
-				case "LOCK_REQUEST":
-					shouldClose = processLockRequest(con, msg); break;
-				case "LOCK_ALLOWED":
-					shouldClose = processLockAllowed(con, msg); break;
-				case "LOCK_DENIED":
-					shouldClose = processLockDenied(con, msg); break;
 				case "LOGOUT":
 					shouldClose = true; break;
 				case "SERVER_ANNOUNCE":
@@ -172,73 +158,6 @@ public class Control {
 		return false;
 	}
 
-	private boolean processLockDenied(Connection connection, String string) {
-		if (!serverConnections.contains(connection)) {
-			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
-			return true;
-		}
-
-		LockDeniedMessage message = new Gson().fromJson(string, LockDeniedMessage.class);
-		String username= message.getUsername();
-		String secret = message.getSecret();
-
-		if(registeredUsers.containsKey(username)){
-			if(registeredUsers.get(username).equals(secret)) {
-				registeredUsers.remove(username);
-			}
-		}
-		if(registrations.containsKey(username)) {
-			PendingRegistration registration = registrations.get(username);
-			registration.sendFailMessage();
-			Connection connectionToClient = registration.getConnectionToClient();
-			connectionToClient.closeCon();
-			connectionClosed(connectionToClient);
-			registrations.remove(username);
-		}
-
-		forwardMessage(message, connection, serverConnections);
-		return false;
-	}
-
-	private boolean processLockAllowed(Connection connection, String string) {
-		if (!serverConnections.contains(connection)) {
-			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
-			return true;
-		}
-
-		LockAllowedMessage message = new Gson().fromJson(string, LockAllowedMessage.class);
-		String username = message.getUsername();
-		if (registrations.containsKey(username)) {
-			PendingRegistration registration = registrations.get(username);
-			registration.acceptApproval(message);
-			if (registration.allApproved()) {
-				registration.sendSuccessMessage();
-				registrations.remove(username);
-			}
-		}
-		forwardMessage(message, connection, serverConnections);
-		return false;
-	}
-
-	private boolean processLockRequest(Connection connection, String string) {
-		if (!serverConnections.contains(connection)) {
-			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
-			return true;
-		}
-		LockRequestMessage message = new Gson().fromJson(string, LockRequestMessage.class);
-		String username = message.getUsername();
-		String secret = message.getSecret();
-
-		if (registeredUsers.containsKey(username)) {
-			connection.sendMessage(new LockDeniedMessage(username, secret));
-		} else {
-			registeredUsers.put(username, secret);
-			connection.sendMessage(new LockAllowedMessage(username, secret));
-			forwardMessage(message, connection, serverConnections);
-		}
-		return false;
-	}
-
 	private boolean processRegister(Connection connection, String string) {
 		RegisterMessage message = new Gson().fromJson(string, RegisterMessage.class);
 		String username = message.getUsername();
@@ -253,28 +172,21 @@ public class Control {
 			connection.sendMessage(new InvalidMessageMessage(info));
 			return true;
 		}
-		boolean shouldClose = false;
 
-		String successInfo = "register success for "+username;
-		String failedInfo = username+" is already registered with the system";
-		RegisterSuccessMessage successMessage = new RegisterSuccessMessage(successInfo);
-		RegisterFailedMessage failedMessage = new RegisterFailedMessage(failedInfo);
+		boolean shouldClose;
 		if(registeredUsers.containsKey(username)) {
-			connection.sendMessage(failedMessage);
+			String info = username+" is already registered with the system";
+			RegisterFailedMessage fail = new RegisterFailedMessage(info);
+			connection.sendMessage(fail);
 			shouldClose = true;
 		} else {
 			registeredUsers.put(username, secret);
-			if (serverConnections.isEmpty()) {
-				// happens when there's only one server
-				connection.sendMessage(successMessage);
-			} else {
-				PendingRegistration pendingRegistration = new PendingRegistration(
-						secret, connection, knownServerIDs.size(), successMessage, failedMessage);
-				registrations.put(username, pendingRegistration);
+			String info = "register success for "+username;
+			RegisterSuccessMessage success = new RegisterSuccessMessage(info);
+			connection.sendMessage(success);
+			shouldClose = false;
 
-				LockRequestMessage request = new LockRequestMessage(username, secret);
-				forwardMessage(request, null, serverConnections);
-			}
+			// MAKE BROADCAST HERE!!!
 		}
 		return shouldClose;
 	}
