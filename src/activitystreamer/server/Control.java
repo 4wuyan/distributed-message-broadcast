@@ -17,16 +17,13 @@ import activitystreamer.util.Settings;
 import messages.*;
 import org.json.simple.JSONObject;
 
-public class Control extends Thread {
+public class Control {
 	private static final Logger log = LogManager.getLogger();
-	private HashSet<Connection> connections;
 	private HashSet<Connection> serverConnections;
 	private HashSet<Connection> clientConnections;
 	private HashMap<String, String> registeredUsers;
 	private OnlineUserManager onlineUserManager;
 	private HashMap<String, PendingRegistration> registrations;
-	private boolean term=false;
-	private Listener listener;
 	private String serverId;
 	private HashMap<String, RedirectMessage> redirects;
 	private HashSet<String> knownServerIDs;
@@ -41,8 +38,6 @@ public class Control extends Thread {
 	}
 
 	private Control() {
-		// initialize the connections array
-		connections = new HashSet<>();
 		serverConnections = new HashSet<>();
 		clientConnections = new HashSet<>();
 		onlineUserManager = new OnlineUserManager();
@@ -54,7 +49,7 @@ public class Control extends Thread {
 		registrations = new HashMap<>();
 		// start a listener
 		try {
-			listener = new Listener();
+			new Listener();
 		} catch (IOException e1) {
 			log.fatal("failed to startup a listening thread: "+e1);
 			System.exit(-1);
@@ -72,6 +67,7 @@ public class Control extends Thread {
 			);
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
+			c.sendMessage(getAnnouncement());
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
 			System.exit(-1);
@@ -138,7 +134,7 @@ public class Control extends Thread {
 			String username = e.getKey();
 			String secret = e.getValue();
 			if (registeredUsers.containsKey(username)) {
-			    if (!registeredUsers.get(username).equals(secret)) {
+				if (!registeredUsers.get(username).equals(secret)) {
 					registeredUsers.remove(username);
 					onlineUserManager.logout(username);
 				}
@@ -299,6 +295,7 @@ public class Control extends Thread {
 			if (! registeredUsers.isEmpty()) {
 				connection.sendMessage(new SyncUserMessage(registeredUsers));
 			}
+			connection.sendMessage(getAnnouncement());
 		}
 		else {
 			connection.sendMessage(new AuthenticationFailMessage("secret incorrect"));
@@ -368,6 +365,7 @@ public class Control extends Thread {
 			} else {
 				clientConnections.add(connection);
 				onlineUserManager.login(username, connection);
+				forwardMessage(getAnnouncement(), null, serverConnections);
 				shouldClose = false;
 			}
 		} else {
@@ -396,18 +394,17 @@ public class Control extends Thread {
 	}
 
 	public synchronized void connectionClosed(Connection con){
-		if(!term){
-			connections.remove(con);
-			serverConnections.remove(con);
-			clientConnections.remove(con);
-			onlineUserManager.remove(con);
+		if(clientConnections.contains(con)) {
+            clientConnections.remove(con);
+			forwardMessage(getAnnouncement(), null, serverConnections);
 		}
+        serverConnections.remove(con);
+        onlineUserManager.remove(con);
 	}
 
 	public synchronized void incomingConnection(Socket s) throws IOException{
 		log.debug("incoming connection: "+Settings.socketAddress(s));
-		Connection c = new Connection(s);
-		connections.add(c);
+		new Connection(s).start();
 	}
 
 	/*
@@ -422,48 +419,15 @@ public class Control extends Thread {
 		}
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
-		connections.add(c);
+		c.start();
 		serverConnections.add(c);
 		return c;
 	}
 
-	@Override
-	public void run(){
-		log.info("using activity interval of "+Settings.getActivityInterval()+" milliseconds");
-		while(!term){
-			// do something with 5 second intervals in between
-			try {
-				Thread.sleep(Settings.getActivityInterval());
-			} catch (InterruptedException e) {
-				log.info("received an interrupt, system is shutting down");
-				break;
-			}
-			if(!term){
-				log.debug("doing activity");
-				term=doActivity();
-			}
-
-		}
-		log.info("closing "+connections.size()+" connections");
-		// clean up
-		for(Connection connection : connections){
-			connection.closeCon();
-		}
-		listener.setTerm(true);
-	}
-
-	private boolean doActivity(){
-		ServerAnnounceMessage message;
+	private ServerAnnounceMessage getAnnouncement(){
 		int load = clientConnections.size();
 		String hostname = Settings.getLocalHostname();
 		int port = Settings.getLocalPort();
-		message = new ServerAnnounceMessage(serverId, load, hostname, port);
-
-		forwardMessage(message, null, serverConnections);
-		return false;
-	}
-
-	public final void setTerm(boolean t){
-		term=t;
+		return new ServerAnnounceMessage(serverId, load, hostname, port);
 	}
 }
