@@ -101,7 +101,8 @@ The receiver will
   or do nothing if the username is known already with the same secret.
   Then forward this message to its downstream servers. 
 * Broadcast a USER_CONFLICT message if the username is known already
-  with a different secret. Then delete the corresponding user info.
+  with a different secret. Then delete the corresponding user info,
+  and disconnect the clients logged in with this username.
 
 ### USER_CONFLICT
 
@@ -119,6 +120,7 @@ Example:
 The receiver will:
 
 * Delete the corresponding user if the username exists in its local storage.
+* Disconnect the clients logged in with this username.
 * Forward this message to its downstream servers.
 
 _For all protocols above, the receiver will reply with INVALID_MESSAGE
@@ -160,8 +162,12 @@ Same as Project 1, except each activity broadcast message now has a unique id fi
 
 ### AUTHENTICATE
 
-Same as Project 1, except the receiver will reply with a SYNC_USER if authentication
-succeeds and there are some users registered already.
+Same as Project 1, except
+
+* The sender will follow with a SERVER_ANNOUNCE.
+* The receiver will reply with a SERVER_ANNOUNCE if successful.
+* The receiver will reply with a SYNC_USER if authentication
+  succeeds and there are some users registered already.
 
 Deleted
 ----------

@@ -106,6 +106,8 @@ public class Control {
 					shouldClose = processSyncUser(con, msg); break;
 				case "NEW_USER":
 					shouldClose = processNewUser(con, msg); break;
+				case "USER_CONFLICT":
+					shouldClose = processUserConflict(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
@@ -120,6 +122,23 @@ public class Control {
 		return shouldClose;
 	}
 
+	private boolean processUserConflict(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		UserConflictMessage message = new Gson().fromJson(string, UserConflictMessage.class);
+		String username = message.getUsername();
+		if (registeredUsers.containsKey(username)) {
+			registeredUsers.remove(username);
+			onlineUserManager.logout(username);
+		}
+		forwardMessage(message, connection, serverConnections);
+
+		return false;
+	}
+
 	private boolean processNewUser(Connection connection, String string) {
 		if (!serverConnections.contains(connection)) {
 			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
@@ -132,7 +151,11 @@ public class Control {
 
 		if (registeredUsers.containsKey(username)) {
 			if (! registeredUsers.get(username).equals(secret)) {
-				// USER CONFLICT
+				registeredUsers.remove(username);
+				onlineUserManager.logout(username);
+				forwardMessage(new UserConflictMessage(username), null, serverConnections);
+			} else {
+				forwardMessage(message, connection, serverConnections);
 			}
 		} else {
 			registeredUsers.put(username, secret);
@@ -313,12 +336,12 @@ public class Control {
 	}
 
 	private RedirectMessage getRedirect() {
-	    for (ServerAnnounceMessage announcement: neighbourInfo.values()) {
-	    	int load = announcement.getLoad();
-	    	if (clientConnections.size() > load) {
-	    		String hostname = announcement.getHostname();
-	    		int port = announcement.getPort();
-	    		return new RedirectMessage(hostname, port);
+	 	for (ServerAnnounceMessage announcement: neighbourInfo.values()) {
+	 		int load = announcement.getLoad();
+	 		if (clientConnections.size() > load) {
+	 			String hostname = announcement.getHostname();
+	 			int port = announcement.getPort();
+	 			return new RedirectMessage(hostname, port);
 			}
 		}
 		return null;
