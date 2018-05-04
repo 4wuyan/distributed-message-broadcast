@@ -23,6 +23,7 @@ public class Control {
 	// for servers
 	private HashSet<Connection> serverConnections;
 	private HashMap<Connection, ServerAnnounceMessage> neighbourInfo;
+	private LimitedLinkedList<ActivityBroadcastMessage> activityHistory;
 
 	// for clients
 	private HashSet<Connection> clientConnections;
@@ -43,6 +44,7 @@ public class Control {
 		// for servers
 		serverConnections = new HashSet<>();
 		neighbourInfo = new HashMap<>();
+		activityHistory = new LimitedLinkedList<>(Settings.getMaxHistory());
 
 		// for clients
 		clientConnections = new HashSet<>();
@@ -301,6 +303,7 @@ public class Control {
 		}
 		ActivityBroadcastMessage message =
 				new Gson().fromJson(string, ActivityBroadcastMessage.class);
+		activityHistory.add(message);
 		forwardMessage(message, connection, serverConnections);
 		forwardMessage(message, null, clientConnections);
 		return false;
