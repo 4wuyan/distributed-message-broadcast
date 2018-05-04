@@ -34,7 +34,6 @@ public class Connection extends Thread {
 		outwriter = new PrintWriter(out, true);
 		this.socket = socket;
 		open = true;
-		start();
 	}
 
 	public synchronized void sendMessage(Message message) {

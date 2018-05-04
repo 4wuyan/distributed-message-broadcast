@@ -17,18 +17,21 @@ import activitystreamer.util.Settings;
 import messages.*;
 import org.json.simple.JSONObject;
 
-public class Control extends Thread {
+public class Control {
 	private static final Logger log = LogManager.getLogger();
-	private HashSet<Connection> connections;
+
+	// for servers
 	private HashSet<Connection> serverConnections;
+	private HashMap<Connection, ServerAnnounceMessage> neighbourInfo;
+
+	// for clients
 	private HashSet<Connection> clientConnections;
-	private HashMap<String, String> registeredUsers;
 	private OnlineUserManager onlineUserManager;
+
+	private HashMap<String, String> registeredUsers;
+
+	// To delete
 	private HashMap<String, PendingRegistration> registrations;
-	private boolean term=false;
-	private Listener listener;
-	private String serverId;
-	private HashMap<String, RedirectMessage> redirects;
 	private HashSet<String> knownServerIDs;
 
 	private static Control control = null;
@@ -41,20 +44,23 @@ public class Control extends Thread {
 	}
 
 	private Control() {
-		// initialize the connections array
-		connections = new HashSet<>();
+		// for servers
 		serverConnections = new HashSet<>();
+		neighbourInfo = new HashMap<>();
+
+		// for clients
 		clientConnections = new HashSet<>();
 		onlineUserManager = new OnlineUserManager();
-		serverId = Settings.nextSecret();
-		redirects = new HashMap<>();
-		knownServerIDs = new HashSet<>();
 
 		registeredUsers = new HashMap<>();
+
+		// to delete
+		knownServerIDs = new HashSet<>();
 		registrations = new HashMap<>();
+
 		// start a listener
 		try {
-			listener = new Listener();
+			new Listener();
 		} catch (IOException e1) {
 			log.fatal("failed to startup a listening thread: "+e1);
 			System.exit(-1);
@@ -72,6 +78,7 @@ public class Control extends Thread {
 			);
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
+			c.sendMessage(getAnnouncement());
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
 			System.exit(-1);
@@ -138,7 +145,7 @@ public class Control extends Thread {
 			String username = e.getKey();
 			String secret = e.getValue();
 			if (registeredUsers.containsKey(username)) {
-			    if (!registeredUsers.get(username).equals(secret)) {
+				if (!registeredUsers.get(username).equals(secret)) {
 					registeredUsers.remove(username);
 					onlineUserManager.logout(username);
 				}
@@ -159,20 +166,7 @@ public class Control extends Thread {
 		}
 
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
-		int load = message.getLoad();
-		String id = message.getId();
-
-		knownServerIDs.add(id);
-
-		if (clientConnections.size() > load) {
-			// When a new client connects later, it will be at least 2 clients less.
-			String hostname = message.getHostname();
-			int port = message.getPort();
-			RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
-			redirects.put(id, redirectMessage);
-		} else {
-			redirects.remove(id);
-		}
+		neighbourInfo.put(connection, message);
 
 		forwardMessage(message, connection, serverConnections);
 		return false;
@@ -299,6 +293,7 @@ public class Control extends Thread {
 			if (! registeredUsers.isEmpty()) {
 				connection.sendMessage(new SyncUserMessage(registeredUsers));
 			}
+			connection.sendMessage(getAnnouncement());
 		}
 		else {
 			connection.sendMessage(new AuthenticationFailMessage("secret incorrect"));
@@ -362,12 +357,14 @@ public class Control extends Thread {
 			connection.sendMessage(new LoginSuccessMessage(replyInfo));
 
 			// check redirect
-			if (!redirects.isEmpty()) {
-				connection.sendMessage(redirects.values().iterator().next());
+			RedirectMessage redirect = getRedirect();
+			if (redirect != null) {
+				connection.sendMessage(redirect);
 				shouldClose = true;
 			} else {
 				clientConnections.add(connection);
 				onlineUserManager.login(username, connection);
+				forwardMessage(getAnnouncement(), null, serverConnections);
 				shouldClose = false;
 			}
 		} else {
@@ -379,6 +376,18 @@ public class Control extends Thread {
 			shouldClose = true;
 		}
 		return shouldClose;
+	}
+
+	private RedirectMessage getRedirect() {
+	    for (ServerAnnounceMessage announcement: neighbourInfo.values()) {
+	    	int load = announcement.getLoad();
+	    	if (clientConnections.size() > load) {
+	    		String hostname = announcement.getHostname();
+	    		int port = announcement.getPort();
+	    		return new RedirectMessage(hostname, port);
+			}
+		}
+		return null;
 	}
 
 	private boolean checkUsernameSecret(String username, String secret) {
@@ -396,18 +405,21 @@ public class Control extends Thread {
 	}
 
 	public synchronized void connectionClosed(Connection con){
-		if(!term){
-			connections.remove(con);
-			serverConnections.remove(con);
+		// For clients
+		if(clientConnections.contains(con)) {
 			clientConnections.remove(con);
-			onlineUserManager.remove(con);
+			forwardMessage(getAnnouncement(), null, serverConnections);
 		}
+		onlineUserManager.remove(con);
+
+		// For servers
+		serverConnections.remove(con);
+		neighbourInfo.remove(con);
 	}
 
 	public synchronized void incomingConnection(Socket s) throws IOException{
 		log.debug("incoming connection: "+Settings.socketAddress(s));
-		Connection c = new Connection(s);
-		connections.add(c);
+		new Connection(s).start();
 	}
 
 	/*
@@ -422,48 +434,15 @@ public class Control extends Thread {
 		}
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
-		connections.add(c);
+		c.start();
 		serverConnections.add(c);
 		return c;
 	}
 
-	@Override
-	public void run(){
-		log.info("using activity interval of "+Settings.getActivityInterval()+" milliseconds");
-		while(!term){
-			// do something with 5 second intervals in between
-			try {
-				Thread.sleep(Settings.getActivityInterval());
-			} catch (InterruptedException e) {
-				log.info("received an interrupt, system is shutting down");
-				break;
-			}
-			if(!term){
-				log.debug("doing activity");
-				term=doActivity();
-			}
-
-		}
-		log.info("closing "+connections.size()+" connections");
-		// clean up
-		for(Connection connection : connections){
-			connection.closeCon();
-		}
-		listener.setTerm(true);
-	}
-
-	private boolean doActivity(){
-		ServerAnnounceMessage message;
+	private ServerAnnounceMessage getAnnouncement(){
 		int load = clientConnections.size();
 		String hostname = Settings.getLocalHostname();
 		int port = Settings.getLocalPort();
-		message = new ServerAnnounceMessage(serverId, load, hostname, port);
-
-		forwardMessage(message, null, serverConnections);
-		return false;
-	}
-
-	public final void setTerm(boolean t){
-		term=t;
+		return new ServerAnnounceMessage(load, hostname, port);
 	}
 }
