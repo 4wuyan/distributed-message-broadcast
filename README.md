@@ -228,7 +228,7 @@ will send a BUNDLE message which includes:
 1. SYNC_USER.
 1. All ACTIVITY_BROADCAST messages after the recorded ID in the cache.
 
-(SYNC_USER could be omitted if there's no user.)
+(SYNC_USER could be omitted if there's no registered user yet.)
 
 The parent node does not care whether it's a new connection or a fixed connection.
 It simply responds to each message as usual.
@@ -241,10 +241,12 @@ Defending the design
 Registration
 -----------
 
-In Project 1 LOCK_DENIED almost never occurs.
-As it's assumed servers never quit or crash, the local storage of different servers
-is always consistent. Hence there's no need to broadcast a LOCK_REQUEST to ask for
-others' approvals, and checking one's own local storage is adequate for registering
+In Project 1 LOCK_DENIED almost never occurs,
+because the local storage of different servers is always consistent
+when there are not concurrent requests.
+
+Hence there's no need to broadcast a LOCK_REQUEST to ask for
+others' approvals. Checking one's own local storage is adequate for registering
 a user. This is exactly what we do in Project 2. NEW_USER protocol is utilised to
 update the local storage of other servers.
 
@@ -274,26 +276,25 @@ Redirection
 
 Though redirection might take more than one step now, it's still acceptable because:
 
-* It's a safer and more reliable mechanism. A client will not be redirected to an
-  unavailable server when network partition happens. A client will not be redirected
-  to a server in another sub-network either
+* It's a safer and more reliable mechanism.
+  A client will not be redirected to an unavailable server
+  or a server in another sub-network
+  if network partition happens, or
   if some server is down and the original network is separated.
-* The extreme condition is rare.
+* The extreme conditions are rare.
 * Otherwise we would need to share SERVER_ANNOUNCE globally,
   which would produce even more messages.
 
 Concurrency
 =============
 
-Network capacity is still a bottleneck for concurrency. No surprise.
-
 The BUNDLE protocol provides the system with the isolation property in concurrency control,
 which protects the business logic under high concurrency situations.
 A BUNDLE message will "lock" the receiver, and make sure the included messages are
 processed sequentially without being interrupted by other messages.
 
-Under high concurrency conditions, two extreme cases could happen, and they
-are successfully handled in our protocol.
+Under high concurrency conditions, two extreme cases could happen,
+and they are both successfully handled in our protocol.
 
 (a)
 If two clients try to register the same username with different secrets at the same time,
