@@ -104,6 +104,8 @@ public class Control {
 					shouldClose = processServerAnnounce(con, msg); break;
 				case "SYNC_USER":
 					shouldClose = processSyncUser(con, msg); break;
+				case "NEW_USER":
+					shouldClose = processNewUser(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
@@ -116,6 +118,28 @@ public class Control {
 			shouldClose = true;
 		}
 		return shouldClose;
+	}
+
+	private boolean processNewUser(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		NewUserMessage message = new Gson().fromJson(string, NewUserMessage.class);
+		String username = message.getUsername();
+		String secret = message.getSecret();
+
+		if (registeredUsers.containsKey(username)) {
+			if (! registeredUsers.get(username).equals(secret)) {
+				// USER CONFLICT
+			}
+		} else {
+			registeredUsers.put(username, secret);
+			forwardMessage(message, connection, serverConnections);
+		}
+
+		return false;
 	}
 
 	private boolean processSyncUser(Connection connection, String string) {
@@ -153,8 +177,6 @@ public class Control {
 
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
 		neighbourInfo.put(connection, message);
-
-		forwardMessage(message, connection, serverConnections);
 		return false;
 	}
 
@@ -186,7 +208,7 @@ public class Control {
 			connection.sendMessage(success);
 			shouldClose = false;
 
-			// MAKE BROADCAST HERE!!!
+			forwardMessage(new NewUserMessage(username, secret), null, serverConnections);
 		}
 		return shouldClose;
 	}
