@@ -24,8 +24,7 @@ public class Control {
 	private HashMap<String, String> registeredUsers;
 	private OnlineUserManager onlineUserManager;
 	private HashMap<String, PendingRegistration> registrations;
-	private String serverId;
-	private HashMap<String, RedirectMessage> redirects;
+	private HashMap<Connection, RedirectMessage> redirects;
 	private HashSet<String> knownServerIDs;
 
 	private static Control control = null;
@@ -41,7 +40,6 @@ public class Control {
 		serverConnections = new HashSet<>();
 		clientConnections = new HashSet<>();
 		onlineUserManager = new OnlineUserManager();
-		serverId = Settings.nextSecret();
 		redirects = new HashMap<>();
 		knownServerIDs = new HashSet<>();
 
@@ -156,18 +154,15 @@ public class Control {
 
 		ServerAnnounceMessage message = new Gson().fromJson(string, ServerAnnounceMessage.class);
 		int load = message.getLoad();
-		String id = message.getId();
-
-		knownServerIDs.add(id);
 
 		if (clientConnections.size() > load) {
 			// When a new client connects later, it will be at least 2 clients less.
 			String hostname = message.getHostname();
 			int port = message.getPort();
 			RedirectMessage redirectMessage = new RedirectMessage(hostname, port);
-			redirects.put(id, redirectMessage);
+			redirects.put(connection, redirectMessage);
 		} else {
-			redirects.remove(id);
+			redirects.remove(connection);
 		}
 
 		forwardMessage(message, connection, serverConnections);
@@ -394,12 +389,16 @@ public class Control {
 	}
 
 	public synchronized void connectionClosed(Connection con){
+		// For clients
 		if(clientConnections.contains(con)) {
-            clientConnections.remove(con);
+			clientConnections.remove(con);
 			forwardMessage(getAnnouncement(), null, serverConnections);
 		}
-        serverConnections.remove(con);
-        onlineUserManager.remove(con);
+		onlineUserManager.remove(con);
+
+		// For servers
+		serverConnections.remove(con);
+		redirects.remove(con);
 	}
 
 	public synchronized void incomingConnection(Socket s) throws IOException{
@@ -428,6 +427,6 @@ public class Control {
 		int load = clientConnections.size();
 		String hostname = Settings.getLocalHostname();
 		int port = Settings.getLocalPort();
-		return new ServerAnnounceMessage(serverId, load, hostname, port);
+		return new ServerAnnounceMessage(load, hostname, port);
 	}
 }
