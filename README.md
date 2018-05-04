@@ -18,46 +18,6 @@ Protocols
 
 The protocols are based on Project 1, with the following differences.
 
-Modified
----------
-
-### SERVER_ANNOUNCE
-
-Same as Project 1, but
-
-* No server id field in the message.
-* A server will now send its SERVER_ANNOUNCE messages only to its direct neighbours,
-  instead of all servers in the network.
-* The announcement is not made periodically, but made when a new server connection is
-  established or the client load changes.
-
-```json
-{
-    "command" : "SERVER_ANNOUNCE",
-    "load" : 5,
-    "hostname" : "128.250.13.46",
-    "port" : 3570
-}
-```
-
-### ACTIVITY_BROADCAST
-
-Same as Project 1, except each activity broadcast message now has a unique id field.
-
-```json
-{
-    "command": "ACTIVITY_BROADCAST",
-    "activity": {},
-    "id": "foobar"
-}
-```
-
-### AUTHENTICATE
-
-Same as Project 1, except the sender will follow with a SYNC_USER afterwards,
-and the receiver will reply with a SYNC_USER if successful.
-(SYNC_USER can be omitted if there's no user yet.)
-
 Added
 -------
 
@@ -68,8 +28,8 @@ Sent from one server to another server.
 Example:
 ```json
 {
-    "command": "SYNC_USER",
-    "users": {"user1": "secret1", "user2": "secret2"}
+  "command": "SYNC_USER",
+  "users": {"user1": "secret1", "user2": "secret2"}
 }
 ```
 
@@ -87,17 +47,39 @@ Sent from one server to another server.
 Example:
 ```json
 {
-    "command": "ACTIVITY_RETRIEVE",
-    "after": "foobar"
+  "command": "ACTIVITY_RETRIEVE",
+  "after": "foobar"
 }
 ```
 
 The receiver will check its cached ACTIVITY_BROADCAST message history, and
+reply with a BUNDLE message which includes all
+ACTIVITY_BROADCAST messages _after_ the given message id
+(or all ACTIVITY_BROADCAST messages in the cache if the given id is not found).
 
-* Reply with all the ACTIVITY_BROADCAST messages _after_ the given message id,
-  if the given id is found in the history.
-* Reply with all the ACTIVITY_BROADCAST messages in the cache,
-  if the given id is not found.
+### BUNDLE
+
+Sent from one server to another server.
+This is a bundled message containing a bunch JSON objects,
+each of which is a valid message.
+It is extremely useful when the sender wants the receiver to process
+a transaction that includes several messages in an isolated way,
+especially in a high concurrency condition.
+
+Example:
+```json
+{
+  "command": "BUNDLE",
+  "messages": [
+    {"command": "AUTHENTICATE", "secret":"foobar"},
+    {"command": "ACTIVITY_RETRIEVE", "after":"secret2"},
+    {"command": "SYNC_USER", "users": {"u1":"s1"}}
+  ]
+}
+```
+
+The receiver will extract all messages in it
+and perform actions accordingly.
 
 ### NEW_USER
 
@@ -107,9 +89,9 @@ after a client registers a new user successfully.
 Example:
 ```json
 {
-    "command": "NEW_USER",
-    "username": "foo",
-    "secret": "bar"
+  "command": "NEW_USER",
+  "username": "foo",
+  "secret": "bar"
 }
 ```
 
@@ -129,8 +111,8 @@ known in its local storage already with a different secret.
 Example:
 ```json
 {
-    "command": "USER_CONFLICT",
-    "username": "foo"
+  "command": "USER_CONFLICT",
+  "username": "foo"
 }
 ```
 
@@ -141,6 +123,45 @@ The receiver will:
 
 _For all protocols above, the receiver will reply with INVALID_MESSAGE
 if the sender is not authenticated or if the message is incorrect anyway._
+
+Modified
+---------
+
+### SERVER_ANNOUNCE
+
+Same as Project 1, but
+
+* No server id field in the message.
+* A server will now send its SERVER_ANNOUNCE messages only to its direct neighbours,
+  instead of all servers in the network.
+* The announcement is not made periodically, but made when a new server connection is
+  established or the client load changes.
+
+```json
+{
+  "command" : "SERVER_ANNOUNCE",
+  "load" : 5,
+  "hostname" : "128.250.13.46",
+  "port" : 3570
+}
+```
+
+### ACTIVITY_BROADCAST
+
+Same as Project 1, except each activity broadcast message now has a unique id field.
+
+```json
+{
+  "command": "ACTIVITY_BROADCAST",
+  "activity": {"authenticated_user": "user1"},
+  "id": "foobar"
+}
+```
+
+### AUTHENTICATE
+
+Same as Project 1, except the receiver will reply with a SYNC_USER if authentication
+succeeds and there are some users registered already.
 
 Deleted
 ----------
@@ -179,11 +200,10 @@ CAP solution
 
 Availability is instantly guaranteed when one or more servers crash or
 network partition happens,
-as the system does not rely on correct global information (such as the global
-SERVER_ANNOUNCE or LOCK_REQUEST in Project 1).
+since the system does not rely on the correctness of global information (such as the global
+SERVER_ANNOUNCE or LOCK_ALLOWED in Project 1).
 The information of local neighbours is sufficient for the system to operate.
 Activity broadcast, registration, and redirection still function in each sub-network as expected.
-
 
 Partition recovery
 --------------------
@@ -200,14 +220,15 @@ If the connection is fixed, there are two things the two parties need to exchang
 synchronise: activity messages and registered users.
 
 Once the connection breaks, the child server will make a note of the message ID of the last
-ACTIVITY_BROADCAST. Once the connection is fixed, after a routine AUTHENTICATE,
-the initiator, i.e. the child node, will:
+ACTIVITY_BROADCAST. As soon as the connection is fixed, the initiator, i.e. the child node,
+will send a BUNDLE message which includes:
 
-* Send all ACTIVITY_BROADCAST messages after the recorded ID in the cache to the other side.
-* Send an ACTIVITY_RETRIEVE to retrieve all the ACTIVITY_BROADCAST messages after the recorded
-  ID from the other side.
-* Send SYNC_USER to the other side.
-  (SYNC_USER from the other side is the reply of AUTHENTICATE.)
+1. AUTHENTICATE. (The other side will reply with SYNC_USER.)
+1. ACTIVITY_RETRIEVE. (The other side will reply with all activities missed.)
+1. SYNC_USER.
+1. All ACTIVITY_BROADCAST messages after the recorded ID in the cache.
+
+(SYNC_USER could be omitted if there's no user.)
 
 The parent node does not care whether it's a new connection or a fixed connection.
 It simply responds to each message as usual.
@@ -266,6 +287,11 @@ Concurrency
 
 Network capacity is still a bottleneck for concurrency. No surprise.
 
+The BUNDLE protocol provides the system with the isolation property in concurrency control,
+which protects the business logic under high concurrency situations.
+A BUNDLE message will "lock" the receiver, and make sure the included messages are
+processed sequentially without being interrupted by other messages.
+
 Under high concurrency conditions, two extreme cases could happen, and they
 are successfully handled in our protocol.
 
@@ -291,3 +317,4 @@ Memo
 * When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_BROADCAST,
   ACTIVITY_RETRIEVE, SYNC_USER, SERVER_ANNOUNCE,
   and the acceptor sends SYNC_USER, SERVER_ANNOUNCE
+* When processing bundle message, check connection closed status
