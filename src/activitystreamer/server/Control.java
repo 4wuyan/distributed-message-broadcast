@@ -19,6 +19,7 @@ public class Control {
 	private static final Logger log = LogManager.getLogger();
 
 	// for servers
+	private Connection parent;
 	private HashSet<Connection> serverConnections;
 	private HashMap<Connection, ServerAnnounceMessage> neighbourInfo;
 	private LimitedLinkedList<ActivityBroadcastMessage> activityHistory;
@@ -40,6 +41,7 @@ public class Control {
 
 	private Control() {
 		// for servers
+		parent = null;
 		serverConnections = new HashSet<>();
 		neighbourInfo = new HashMap<>();
 		activityHistory = new LimitedLinkedList<>(Settings.getMaxHistory());
@@ -60,7 +62,7 @@ public class Control {
 		log.info("using given secret: " + Settings.getSecret());
 	}
 
-	public void initiateConnection(){
+	public synchronized void initiateConnection(){
 		// make a connection to another server if remote hostname is supplied
 		if(Settings.getRemoteHostname()==null) return;
 
@@ -71,6 +73,7 @@ public class Control {
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
 			c.sendMessage(getAnnouncement());
+			parent = c;
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
 			System.exit(-1);
@@ -414,6 +417,9 @@ public class Control {
 		// For servers
 		serverConnections.remove(con);
 		neighbourInfo.remove(con);
+		if (con == parent) {
+		    // partition recovery
+		}
 	}
 
 	public synchronized void incomingConnection(Socket s) throws IOException{
