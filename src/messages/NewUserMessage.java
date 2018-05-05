@@ -1,10 +1,10 @@
 package messages;
 
-public class LockRequestMessage extends Message {
+public class NewUserMessage extends Message{
     private String username, secret;
 
-    public LockRequestMessage(String username, String secret) {
-        super("LOCK_REQUEST");
+    public NewUserMessage(String username, String secret) {
+        super("NEW_USER");
         this.username = username;
         this.secret = secret;
     }

@@ -18,7 +18,6 @@ public class Listener extends Thread{
 	Listener() throws IOException{
 		portnum = Settings.getLocalPort(); // keep our own copy in case it changes later
 		serverSocket = new ServerSocket(portnum);
-		start();
 	}
 	
 	@Override
