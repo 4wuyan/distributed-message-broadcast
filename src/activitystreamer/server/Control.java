@@ -102,6 +102,9 @@ public class Control {
 					shouldClose = processRegister(con, msg); break;
 				case "AUTHENTICATE":
 					shouldClose = processAuthenticate(con, msg); break;
+				case "AUTHENTICATION_FAIL":
+					parent = null;
+					shouldClose = true; break;
 				case "LOGOUT":
 					shouldClose = true; break;
 				case "SERVER_ANNOUNCE":
