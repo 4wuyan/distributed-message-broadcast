@@ -313,19 +313,18 @@ public class Control {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 		boolean isValid = checkUsernameSecret(username, secret);
-		Message reply;
 		if(isValid) {
 			JSONObject activity = message.getActivity();
 			activity.put("authenticated_user", username);
 			String id = Settings.nextSecret();
-			reply = new ActivityBroadcastMessage(activity, id);
-			forwardMessage(reply, connection, clientConnections);
-			forwardMessage(reply, null, serverConnections);
+			ActivityBroadcastMessage broadcast = new ActivityBroadcastMessage(activity, id);
+			activityHistory.add(broadcast);
+			forwardMessage(broadcast, null, clientConnections);
+			forwardMessage(broadcast, null, serverConnections);
 		} else {
 			String info = "username and/or secret is incorrect";
-			reply = new AuthenticationFailMessage(info);
+			connection.sendMessage(new AuthenticationFailMessage(info));
 		}
-		connection.sendMessage(reply);
 
 		return !isValid;
 	}

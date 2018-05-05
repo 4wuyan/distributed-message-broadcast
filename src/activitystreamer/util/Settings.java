@@ -9,7 +9,6 @@ import org.apache.logging.log4j.Logger;
 
 public class Settings {
 	private static final Logger log = LogManager.getLogger();
-	private static SecureRandom random = new SecureRandom();
 	private static int localPort = 3780;
 	private static String localHostname = "localhost";
 	private static String remoteHostname = null;
@@ -102,6 +101,7 @@ public class Settings {
 	}
 
 	public static String nextSecret() {
+		SecureRandom random = new SecureRandom();
 		return new BigInteger(130, random).toString(32);
 	 }
 
