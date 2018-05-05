@@ -108,12 +108,10 @@ public class Control {
 					shouldClose = processNewUser(con, msg); break;
 				case "USER_CONFLICT":
 					shouldClose = processUserConflict(con, msg); break;
- 	 	 	 	/*
 				case "ACTIVITY_RETRIEVE":
-					break;
+					shouldClose = processActivityRetrieve(con, msg); break;
 				case "BUNDLE":
-					break;
- 	 	 	 	*/
+					shouldClose = processBundleMessage(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
@@ -130,6 +128,37 @@ public class Control {
 			con.sendMessage(reply);
 			shouldClose = true;
 		}
+		return shouldClose;
+	}
+
+	private boolean processActivityRetrieve(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		ActivityRetrieveMessage message = new Gson().fromJson(string, ActivityRetrieveMessage.class);
+		String lastMessageId = message.getAfter();
+
+		LinkedList<ActivityBroadcastMessage> activities = getActivityBroadcastAfter(lastMessageId);
+		BundleMessage response = new BundleMessage(activities);
+
+		connection.sendMessage(response);
+		return false;
+	}
+
+	private boolean processBundleMessage(Connection connection, String string) {
+		boolean shouldClose= false;
+
+		BundleMessage message = new Gson().fromJson(string, BundleMessage.class);
+		LinkedList<String> messageStrings = message.getMessages();
+		for (String messageString : messageStrings) {
+			shouldClose = process(connection, messageString);
+			if (shouldClose) {
+				break;
+			}
+		}
+
 		return shouldClose;
 	}
 

@@ -59,7 +59,6 @@ ACTIVITY_BROADCAST messages _after_ the given message id
 
 ### BUNDLE
 
-Sent from one server to another server.
 This is a bundled message containing a bunch JSON objects,
 each of which is a valid message.
 It is extremely useful when the sender wants the receiver to process
