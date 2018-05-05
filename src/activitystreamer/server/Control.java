@@ -56,7 +56,7 @@ public class Control {
 
 		// start a listener
 		try {
-			new Listener();
+			new Listener().start();
 		} catch (IOException e1) {
 			log.fatal("failed to startup a listening thread: "+e1);
 			System.exit(-1);
