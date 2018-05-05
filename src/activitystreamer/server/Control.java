@@ -19,7 +19,6 @@ public class Control {
 	private static final Logger log = LogManager.getLogger();
 
 	// for servers
-	private Connection parent;
 	private HashSet<Connection> serverConnections;
 	private HashMap<Connection, ServerAnnounceMessage> neighbourInfo;
 	private LimitedLinkedList<ActivityBroadcastMessage> activityHistory;
@@ -29,6 +28,10 @@ public class Control {
 	private OnlineUserManager onlineUserManager;
 
 	private HashMap<String, String> registeredUsers;
+
+	// for partition recovery
+	private Connection parent = null;
+	private String lastId = "";
 
 	private static Control control = null;
 
@@ -41,7 +44,6 @@ public class Control {
 
 	private Control() {
 		// for servers
-		parent = null;
 		serverConnections = new HashSet<>();
 		neighbourInfo = new HashMap<>();
 		activityHistory = new LimitedLinkedList<>(Settings.getMaxHistory());
@@ -73,7 +75,6 @@ public class Control {
 			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
 			c.sendMessage(message);
 			c.sendMessage(getAnnouncement());
-			parent = c;
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
 			System.exit(-1);
@@ -417,8 +418,15 @@ public class Control {
 		// For servers
 		serverConnections.remove(con);
 		neighbourInfo.remove(con);
+
+		// For partition recovery
 		if (con == parent) {
-		    // partition recovery
+			parent = null;
+			ActivityBroadcastMessage last = activityHistory.peekLast();
+			if (last != null) {
+			    lastId = last.getId();
+			}
+		    new Reconnect().start();
 		}
 	}
 
@@ -440,6 +448,7 @@ public class Control {
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
 		c.start();
+		parent = c;
 		serverConnections.add(c);
 		return c;
 	}
@@ -464,4 +473,24 @@ public class Control {
 		}
 		return answer;
  	}
+
+ 	public synchronized void connectionRecover(Socket socket) {
+		Connection connection;
+		try {
+			connection = outgoingConnection(socket);
+		} catch (IOException e) {
+		    log.debug("can't make recovery connection");
+		    new Reconnect().start();
+		    return;
+		}
+
+		LinkedList<Message> messages = new LinkedList<>();
+		messages.add(new AuthenticateMessage(Settings.getSecret()));
+		messages.add(new ActivityRetrieveMessage(lastId));
+		messages.add(new SyncUserMessage(new HashMap<>(registeredUsers)));
+		messages.addAll(getActivityBroadcastAfter(lastId));
+
+		BundleMessage bundleMessage = new BundleMessage(messages);
+		connection.sendMessage(bundleMessage);
+	}
 }
