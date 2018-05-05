@@ -479,9 +479,9 @@ public class Control {
 		try {
 			connection = outgoingConnection(socket);
 		} catch (IOException e) {
-		    log.debug("can't make recovery connection");
-		    new Reconnect().start();
-		    return;
+			log.debug("can't make recovery connection");
+			new Reconnect().start();
+			return;
 		}
 
 		LinkedList<Message> messages = new LinkedList<>();
