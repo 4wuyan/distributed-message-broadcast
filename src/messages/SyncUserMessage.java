@@ -7,7 +7,7 @@ public class SyncUserMessage extends Message {
 
     public SyncUserMessage(HashMap<String,String> users) {
         super("SYNC_USER");
-        this.users = new HashMap<>(users);
+        this.users = users;
     }
 
     public HashMap<String, String> getUsers() {

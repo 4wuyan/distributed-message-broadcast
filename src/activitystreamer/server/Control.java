@@ -259,7 +259,8 @@ public class Control {
 		if(secret.equals(Settings.getSecret())) {
 			serverConnections.add(connection);
 			if (! registeredUsers.isEmpty()) {
-				connection.sendMessage(new SyncUserMessage(registeredUsers));
+				HashMap<String,String> copy = new HashMap<>(registeredUsers);
+				connection.sendMessage(new SyncUserMessage(copy));
 			}
 			connection.sendMessage(getAnnouncement());
 		}
