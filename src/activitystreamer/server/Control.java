@@ -3,9 +3,7 @@ package activitystreamer.server;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -23,6 +21,7 @@ public class Control {
 	// for servers
 	private HashSet<Connection> serverConnections;
 	private HashMap<Connection, ServerAnnounceMessage> neighbourInfo;
+	private LimitedLinkedList<ActivityBroadcastMessage> activityHistory;
 
 	// for clients
 	private HashSet<Connection> clientConnections;
@@ -43,6 +42,7 @@ public class Control {
 		// for servers
 		serverConnections = new HashSet<>();
 		neighbourInfo = new HashMap<>();
+		activityHistory = new LimitedLinkedList<>(Settings.getMaxHistory());
 
 		// for clients
 		clientConnections = new HashSet<>();
@@ -108,22 +108,57 @@ public class Control {
 					shouldClose = processNewUser(con, msg); break;
 				case "USER_CONFLICT":
 					shouldClose = processUserConflict(con, msg); break;
+				case "ACTIVITY_RETRIEVE":
+					shouldClose = processActivityRetrieve(con, msg); break;
+				case "BUNDLE":
+					shouldClose = processBundleMessage(con, msg); break;
 				default:
 					// other commands.
 					shouldClose = true; break;
 			}
 		} catch (NullPointerException|IllegalStateException|JsonSyntaxException e) {
-		    /* Exception examples:
-		    {} -> NullPinterException
-		    xx -> IllegalStateException
-		    {x -> JsonSyntaxException
-		     */
+		 	/* Exception examples:
+		 	{} -> NullPinterException
+		 	xx -> IllegalStateException
+		 	{x -> JsonSyntaxException
+		 	 */
 			log.debug("failed to parse an incoming message in json");
 			InvalidMessageMessage reply;
 			reply = new InvalidMessageMessage("your message is invalid");
 			con.sendMessage(reply);
 			shouldClose = true;
 		}
+		return shouldClose;
+	}
+
+	private boolean processActivityRetrieve(Connection connection, String string) {
+		if (!serverConnections.contains(connection)) {
+			connection.sendMessage(new InvalidMessageMessage("you are not authenticated"));
+			return true;
+		}
+
+		ActivityRetrieveMessage message = new Gson().fromJson(string, ActivityRetrieveMessage.class);
+		String lastMessageId = message.getAfter();
+
+		LinkedList<ActivityBroadcastMessage> activities = getActivityBroadcastAfter(lastMessageId);
+		BundleMessage response = new BundleMessage(activities);
+
+		connection.sendMessage(response);
+		return false;
+	}
+
+	private boolean processBundleMessage(Connection connection, String string) {
+		boolean shouldClose= false;
+
+		BundleMessage message = new Gson().fromJson(string, BundleMessage.class);
+		LinkedList<String> messageStrings = message.getMessages();
+		for (String messageString : messageStrings) {
+			shouldClose = process(connection, messageString);
+			if (shouldClose) {
+				break;
+			}
+		}
+
 		return shouldClose;
 	}
 
@@ -253,7 +288,8 @@ public class Control {
 		if(secret.equals(Settings.getSecret())) {
 			serverConnections.add(connection);
 			if (! registeredUsers.isEmpty()) {
-				connection.sendMessage(new SyncUserMessage(registeredUsers));
+				HashMap<String,String> copy = new HashMap<>(registeredUsers);
+				connection.sendMessage(new SyncUserMessage(copy));
 			}
 			connection.sendMessage(getAnnouncement());
 		}
@@ -277,18 +313,18 @@ public class Control {
 		String username = message.getUsername();
 		String secret = message.getSecret();
 		boolean isValid = checkUsernameSecret(username, secret);
-		Message reply;
 		if(isValid) {
 			JSONObject activity = message.getActivity();
 			activity.put("authenticated_user", username);
-			reply = new ActivityBroadcastMessage(activity);
-			forwardMessage(reply, connection, clientConnections);
-			forwardMessage(reply, null, serverConnections);
+			String id = Settings.nextSecret();
+			ActivityBroadcastMessage broadcast = new ActivityBroadcastMessage(activity, id);
+			activityHistory.add(broadcast);
+			forwardMessage(broadcast, null, clientConnections);
+			forwardMessage(broadcast, null, serverConnections);
 		} else {
 			String info = "username and/or secret is incorrect";
-			reply = new AuthenticationFailMessage(info);
+			connection.sendMessage(new AuthenticationFailMessage(info));
 		}
-		connection.sendMessage(reply);
 
 		return !isValid;
 	}
@@ -300,6 +336,7 @@ public class Control {
 		}
 		ActivityBroadcastMessage message =
 				new Gson().fromJson(string, ActivityBroadcastMessage.class);
+		activityHistory.add(message);
 		forwardMessage(message, connection, serverConnections);
 		forwardMessage(message, null, clientConnections);
 		return false;
@@ -407,4 +444,18 @@ public class Control {
 		int port = Settings.getLocalPort();
 		return new ServerAnnounceMessage(load, hostname, port);
 	}
+
+	private LinkedList<ActivityBroadcastMessage> getActivityBroadcastAfter(String id) {
+	 	LinkedList<ActivityBroadcastMessage> answer = new LinkedList<>();
+		Iterator<ActivityBroadcastMessage> iterator = activityHistory.descendingIterator();
+		while (iterator.hasNext()) {
+			ActivityBroadcastMessage message = iterator.next();
+			if (message.getId().equals(id)) {
+				break;
+			} else {
+				answer.addFirst(message);
+			}
+		}
+		return answer;
+ 	}
 }

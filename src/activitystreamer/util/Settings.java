@@ -9,15 +9,23 @@ import org.apache.logging.log4j.Logger;
 
 public class Settings {
 	private static final Logger log = LogManager.getLogger();
-	private static SecureRandom random = new SecureRandom();
 	private static int localPort = 3780;
 	private static String localHostname = "localhost";
 	private static String remoteHostname = null;
 	private static int remotePort = 3780;
 	private static int activityInterval = 5000; // milliseconds
+	private static int maxReconnectAttempts = 1500; // around 2 hours with default activityInterval
+    private static int maxHistory = 20000;
 	private static String secret = null;
 	private static String username = "anonymous";
 
+	public static int getMaxHistory() {
+		return maxHistory;
+	}
+
+	public static int getMaxReconnectAttempts() {
+		return maxReconnectAttempts;
+	}
 
 	public static int getLocalPort() {
 		return localPort;
@@ -93,6 +101,7 @@ public class Settings {
 	}
 
 	public static String nextSecret() {
+		SecureRandom random = new SecureRandom();
 		return new BigInteger(130, random).toString(32);
 	 }
 

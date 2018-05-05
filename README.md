@@ -57,30 +57,6 @@ reply with a BUNDLE message which includes all
 ACTIVITY_BROADCAST messages _after_ the given message id
 (or all ACTIVITY_BROADCAST messages in the cache if the given id is not found).
 
-### BUNDLE
-
-Sent from one server to another server.
-This is a bundled message containing a bunch JSON objects,
-each of which is a valid message.
-It is extremely useful when the sender wants the receiver to process
-a transaction that includes several messages in an isolated way,
-especially in a high concurrency condition.
-
-Example:
-```json
-{
-  "command": "BUNDLE",
-  "messages": [
-    {"command": "AUTHENTICATE", "secret":"foobar"},
-    {"command": "ACTIVITY_RETRIEVE", "after":"secret2"},
-    {"command": "SYNC_USER", "users": {"u1":"s1"}}
-  ]
-}
-```
-
-The receiver will extract all messages in it
-and perform actions accordingly.
-
 ### NEW_USER
 
 Sent from one server to all the other servers in the network,
@@ -125,6 +101,29 @@ The receiver will:
 
 _For all protocols above, the receiver will reply with INVALID_MESSAGE
 if the sender is not authenticated or if the message is incorrect anyway._
+
+### BUNDLE
+
+This is a bundled message containing a bunch JSON objects,
+each of which is a valid message.
+It is extremely useful when the sender wants the receiver to process
+a transaction that includes several messages in an isolated way,
+especially in a high concurrency condition.
+
+Example:
+```json
+{
+  "command": "BUNDLE",
+  "messages": [
+    {"command": "AUTHENTICATE", "secret":"foobar"},
+    {"command": "ACTIVITY_RETRIEVE", "after":"secret2"},
+    {"command": "SYNC_USER", "users": {"u1":"s1"}}
+  ]
+}
+```
+
+The receiver will extract all messages in it
+and perform actions accordingly.
 
 Modified
 ---------
