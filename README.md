@@ -228,9 +228,10 @@ Once the connection breaks, the child server will make a note of the message ID 
 ACTIVITY_BROADCAST. As soon as the connection is fixed, the initiator, i.e. the child node,
 will send a BUNDLE message which includes:
 
-1. AUTHENTICATE. (The other side will reply with SYNC_USER.)
+1. AUTHENTICATE. (The other side will reply with SYNC_USER and SERVER_ANNOUNCE.)
 1. ACTIVITY_RETRIEVE. (The other side will reply with all activities missed.)
 1. SYNC_USER.
+1. SERVER_ANNOUNCE.
 1. All ACTIVITY_BROADCAST messages after the recorded ID in the cache.
 
 (SYNC_USER could be omitted if there's no registered user yet.)
@@ -315,12 +316,3 @@ Scalability
 =============
 
 The system is very scalable as the operations are all in O(n) time now.
-
-Memo
-====
-
-* Don't forget to disconnect clients with conflict servers when receiving USER_CONFLICT or SYNC_USER
-* When partition is fixed, the initiator sends AUTHENTICATE, ACTIVITY_BROADCAST,
-  ACTIVITY_RETRIEVE, SYNC_USER, SERVER_ANNOUNCE,
-  and the acceptor sends SYNC_USER, SERVER_ANNOUNCE
-* When processing bundle message, check connection closed status

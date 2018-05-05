@@ -491,6 +491,7 @@ public class Control {
 		messages.add(new AuthenticateMessage(Settings.getSecret()));
 		messages.add(new ActivityRetrieveMessage(lastId));
 		messages.add(new SyncUserMessage(new HashMap<>(registeredUsers)));
+		messages.add(getAnnouncement());
 		messages.addAll(getActivityBroadcastAfter(lastId));
 
 		BundleMessage bundleMessage = new BundleMessage(messages);
