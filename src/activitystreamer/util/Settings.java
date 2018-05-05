@@ -15,7 +15,7 @@ public class Settings {
 	private static int remotePort = 3780;
 	private static int activityInterval = 5000; // milliseconds
 	private static int maxReconnectAttempts = 1500; // around 2 hours with default activityInterval
-    private static int maxHistory = 20000;
+	private static int maxHistory = 20000;
 	private static String secret = null;
 	private static String username = "anonymous";
 
