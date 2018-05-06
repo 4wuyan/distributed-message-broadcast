@@ -72,8 +72,7 @@ public class Control {
 			Connection c = outgoingConnection(
 				new Socket(Settings.getRemoteHostname(),Settings.getRemotePort())
 			);
-			AuthenticateMessage message = new AuthenticateMessage(Settings.getSecret());
-			c.sendMessage(message);
+			c.sendMessage(new AuthenticateMessage(Settings.getSecret()));
 			c.sendMessage(getAnnouncement());
 		} catch (IOException e) {
 			log.error("failed to make connection to "+Settings.getRemoteHostname()+":"+Settings.getRemotePort()+" :"+e);
@@ -103,7 +102,7 @@ public class Control {
 				case "AUTHENTICATE":
 					shouldClose = processAuthenticate(con, msg); break;
 				case "AUTHENTICATION_FAIL":
-					parent = null;
+					if (con == parent) parent = null;
 					shouldClose = true; break;
 				case "LOGOUT":
 					shouldClose = true; break;
@@ -299,6 +298,7 @@ public class Control {
 				connection.sendMessage(new SyncUserMessage(copy));
 			}
 			connection.sendMessage(getAnnouncement());
+			connection.startHeartbeat();
 		}
 		else {
 			connection.sendMessage(new AuthenticationFailMessage("secret incorrect"));
@@ -427,9 +427,9 @@ public class Control {
 			parent = null;
 			ActivityBroadcastMessage last = activityHistory.peekLast();
 			if (last != null) {
-			    lastId = last.getId();
+				lastId = last.getId();
 			}
-		    new Reconnect().start();
+			new Reconnect().start();
 		}
 	}
 
@@ -451,6 +451,7 @@ public class Control {
 		log.debug("outgoing connection: "+Settings.socketAddress(s));
 		Connection c = new Connection(s);
 		c.start();
+		c.startHeartbeat();
 		parent = c;
 		serverConnections.add(c);
 		return c;

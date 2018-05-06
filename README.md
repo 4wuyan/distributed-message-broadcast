@@ -200,6 +200,17 @@ However, SERVER_ANNOUNCE is now shared locally rather than globally.
 Hence one redirection can only take a client to a server's neighbour,
 and it could take several steps for a client to get accepted finally.
 
+Partition detection
+======================
+
+TCP connections may remain open when Internet goes off.
+To be able to detect partition in time,
+each server will be sending (very short) heartbeat messages
+to neighbour servers periodically (e.g. 1 Hz).
+A server is considered unavailable if the other side has not heard its
+heartbeat for a timeout (e.g. 3 s).
+Then the connection is closed anyway.
+
 CAP solution
 ====================
 

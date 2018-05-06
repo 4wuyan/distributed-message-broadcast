@@ -2,8 +2,6 @@ package activitystreamer.server;
 
 
 import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -18,29 +16,34 @@ import messages.*;
 
 public class Connection extends Thread {
 	private static final Logger log = LogManager.getLogger();
-	private DataInputStream in;
-	private DataOutputStream out;
-	private BufferedReader inreader;
-	private PrintWriter outwriter;
+	private BufferedReader in;
+	private PrintWriter out;
 	private boolean open;
 	private Socket socket;
 	private boolean term=false;
-
+	private String heartbeatMessage = "h";
+	private Heartbeat keepAlive;
 
 	Connection(Socket socket) throws IOException{
-		in = new DataInputStream(socket.getInputStream());
-		out = new DataOutputStream(socket.getOutputStream());
-		inreader = new BufferedReader( new InputStreamReader(in));
-		outwriter = new PrintWriter(out, true);
+		in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+		out = new PrintWriter(socket.getOutputStream(), true);
 		this.socket = socket;
 		open = true;
+		keepAlive = new Heartbeat(this);
 	}
 
-	public synchronized void sendMessage(Message message) {
+	public void sendMessage(Message message) {
+		sendMessage(message.toString());
+	}
+
+	private synchronized void sendMessage(String string) {
 		if(open){
-			outwriter.println(message.toString());
-			outwriter.flush();
+			out.println(string);
 		}
+	}
+
+	public void sendHeartbeat() {
+		sendMessage(heartbeatMessage);
 	}
 
 	public void closeCon(){
@@ -54,23 +57,33 @@ public class Connection extends Thread {
 				log.error("received exception closing the connection "+Settings.socketAddress(socket)+": "+e);
 			}
 		}
+		Control.getInstance().connectionClosed(this);
+		open = false;
 	}
-
 
 	public void run(){
 		try {
 			String data;
-			while(!term && (data = inreader.readLine())!=null){
-				log.info(data);
-				term=Control.getInstance().process(this,data);
+			while(!term && (data = in.readLine())!=null){
+				if (data.equals(heartbeatMessage)){
+					keepAlive.resetTimeout();
+				} else {
+					log.info(data);
+					term = Control.getInstance().process(this, data);
+				}
 			}
 			log.debug("connection closed to "+Settings.socketAddress(socket));
-			Control.getInstance().connectionClosed(this);
-			in.close();
 		} catch (IOException e) {
 			log.error("connection "+Settings.socketAddress(socket)+" closed with exception: "+e);
-			Control.getInstance().connectionClosed(this);
 		}
-		open=false;
+		closeCon();
+	}
+
+	public boolean isOpen() {
+		return open;
+	}
+
+	public void startHeartbeat() {
+		keepAlive.start();
 	}
 }
